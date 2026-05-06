@@ -57,6 +57,20 @@ def _mock_deps_ok():
     return patch("mcp_video.hyperframes_engine.shutil.which", side_effect=_which)
 
 
+def _has_real_hyperframes_cli() -> bool:
+    """Return True only when the no-install Hyperframes CLI path works."""
+    try:
+        result = subprocess.run(
+            ["npx", "--yes", "--no-install", "hyperframes", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 # ---------------------------------------------------------------------------
 # Test: _require_hyperframes_deps
 # ---------------------------------------------------------------------------
@@ -889,6 +903,10 @@ class TestErrorHandling:
 
 
 @pytest.mark.hyperframes
+@pytest.mark.skipif(
+    not _has_real_hyperframes_cli(),
+    reason="requires a locally installed Hyperframes CLI available via npx --no-install",
+)
 class TestHyperframesIntegration:
     """Integration tests that require a real Node.js/Hyperframes installation."""
 
