@@ -56,6 +56,10 @@ def _make_completed_process(
     )
 
 
+def _hyperframes_subcommand(cmd: list[str]) -> str:
+    return cmd[cmd.index("hyperframes") + 1]
+
+
 def _mock_deps_ok():
     """Return a patcher that makes shutil.which find node and npx."""
 
@@ -565,7 +569,8 @@ class TestHyperframes05Tools:
 
         assert result.items[0]["name"] == "tiktok-follow"
         cmd = mock_run.call_args[0][0]
-        assert cmd[:3] == ["npx", "hyperframes", "catalog"]
+        assert cmd[0] == "npx"
+        assert _hyperframes_subcommand(cmd) == "catalog"
         assert "--json" in cmd
         assert "--tag" in cmd
         assert cmd[cmd.index("--tag") + 1] == "social"
@@ -595,7 +600,8 @@ class TestHyperframes05Tools:
 
         assert result.data["projectPath"].endswith("captured")
         cmd = mock_run.call_args[0][0]
-        assert cmd[:3] == ["npx", "hyperframes", "capture"]
+        assert cmd[0] == "npx"
+        assert _hyperframes_subcommand(cmd) == "capture"
         assert "https://example.com" in cmd
         assert "--json" in cmd
 
@@ -603,20 +609,23 @@ class TestHyperframes05Tools:
         tts_payload = json.dumps({"output": str(tmp_path / "speech.wav")})
         transcribe_payload = json.dumps({"words": [{"word": "hello", "start": 0.0}]})
 
-        with _mock_deps_ok(), patch(
-            "mcp_video.hyperframes_engine.subprocess.run",
-            side_effect=[
-                _make_completed_process(stdout=tts_payload),
-                _make_completed_process(stdout=transcribe_payload),
-            ],
-        ) as mock_run:
+        with (
+            _mock_deps_ok(),
+            patch(
+                "mcp_video.hyperframes_engine.subprocess.run",
+                side_effect=[
+                    _make_completed_process(stdout=tts_payload),
+                    _make_completed_process(stdout=transcribe_payload),
+                ],
+            ) as mock_run,
+        ):
             speech = tts("hello", output_path=str(tmp_path / "speech.wav"), voice="af_heart")
             transcript = transcribe("/tmp/video.mp4", project_path=str(tmp_path), model="base.en")
 
         assert speech.data["output"].endswith("speech.wav")
         assert transcript.data["words"][0]["word"] == "hello"
-        assert mock_run.call_args_list[0][0][0][2] == "tts"
-        assert mock_run.call_args_list[1][0][0][2] == "transcribe"
+        assert _hyperframes_subcommand(mock_run.call_args_list[0][0][0]) == "tts"
+        assert _hyperframes_subcommand(mock_run.call_args_list[1][0][0]) == "transcribe"
 
     def test_remove_background_doctor_info_and_benchmark(self, sample_hyperframes_project):
         responses = [
@@ -636,7 +645,7 @@ class TestHyperframes05Tools:
         assert health.data["version"] == "0.5.0"
         assert meta.data["name"] == "project"
         assert bench.data["runs"] == []
-        assert [call[0][0][2] for call in mock_run.call_args_list] == [
+        assert [_hyperframes_subcommand(call[0][0]) for call in mock_run.call_args_list] == [
             "remove-background",
             "doctor",
             "info",

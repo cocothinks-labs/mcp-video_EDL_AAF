@@ -89,7 +89,9 @@ def handle_hyperframes_commands(args: Any, *, use_json: bool) -> bool:
     def _inspect(a, j):
         from ..hyperframes_engine import inspect
 
-        r = _with_spinner("Inspecting Hyperframes layout...", inspect, a.project_path, samples=a.samples, strict=a.strict)
+        r = _with_spinner(
+            "Inspecting Hyperframes layout...", inspect, a.project_path, samples=a.samples, strict=a.strict
+        )
         _out(r, j, print, json_transform=lambda r: r.model_dump() if hasattr(r, "model_dump") else r)
 
     runner.register("hyperframes-inspect", _inspect)
@@ -121,7 +123,9 @@ def handle_hyperframes_commands(args: Any, *, use_json: bool) -> bool:
     def _tts(a, j):
         from ..hyperframes_engine import tts
 
-        r = _with_spinner("Generating speech...", tts, a.text_or_file, output_path=a.output, voice=a.voice, speed=a.speed)
+        r = _with_spinner(
+            "Generating speech...", tts, a.text_or_file, output_path=a.output, voice=a.voice, speed=a.speed
+        )
         _out(r, j, print, json_transform=lambda r: r.model_dump() if hasattr(r, "model_dump") else r)
 
     runner.register("hyperframes-tts", _tts)

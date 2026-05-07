@@ -278,7 +278,11 @@ CLIENT_METHOD_CONTRACTS: dict[str, dict[str, Any]] = {
     "hyperframes_info": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {}},
     "hyperframes_catalog": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {}},
     "hyperframes_capture": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {}},
-    "hyperframes_tts": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {"output": "output_path"}},
+    "hyperframes_tts": {
+        "category": "report",
+        "return_type": "HyperframesJsonResult",
+        "aliases": {"output": "output_path"},
+    },
     "hyperframes_transcribe": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {}},
     "hyperframes_remove_background": {
         "category": "report",
@@ -286,7 +290,11 @@ CLIENT_METHOD_CONTRACTS: dict[str, dict[str, Any]] = {
         "aliases": {"output": "output_path", "background_output": "background_output_path"},
     },
     "hyperframes_doctor": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {}},
-    "hyperframes_benchmark": {"category": "report", "return_type": "HyperframesJsonResult", "aliases": {"output": "output_path"}},
+    "hyperframes_benchmark": {
+        "category": "report",
+        "return_type": "HyperframesJsonResult",
+        "aliases": {"output": "output_path"},
+    },
     "hyperframes_to_mcpvideo": {"category": "media", "return_type": MEDIA_RETURN, "aliases": {"output": "output_path"}},
     "hyperframes_compositions": {"category": "report", "return_type": "list", "aliases": {}},
     "hyperframes_preview": {"category": "report", "return_type": "dict", "aliases": {}},
