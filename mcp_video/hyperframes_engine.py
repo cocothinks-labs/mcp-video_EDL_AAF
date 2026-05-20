@@ -366,7 +366,7 @@ def _hyperframes_op(
     for flag, kw_key in spec.get("flags", {}).items():
         val = kwargs.get(kw_key)
         if val is not None:
-            args.extend([f"--{flag}", str(val)])
+            args.extend([f"--{flag}", _format_cli_value(val)])
 
     for flag, kw_key in spec.get("switches", {}).items():
         if kwargs.get(kw_key):
@@ -376,13 +376,20 @@ def _hyperframes_op(
         args.append(item)
 
     for flag, compute in spec.get("computed", {}).items():
-        args.extend([f"--{flag}", str(compute(kwargs))])
+        args.extend([f"--{flag}", _format_cli_value(compute(kwargs))])
 
     result = _run_hyperframes(args, cwd=cwd, timeout=spec.get("timeout", 600))
     if result.returncode != 0:
         raise HyperframesRenderError(" ".join(args), result.returncode, result.stderr)
 
     return result, cwd
+
+
+def _format_cli_value(value: Any) -> str:
+    """Format Hyperframes CLI flag values without introducing false precision."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 def _post_process_ops() -> dict[str, Callable]:
