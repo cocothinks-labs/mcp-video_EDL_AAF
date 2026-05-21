@@ -17,6 +17,7 @@ import subprocess
 import time
 import contextlib
 import html
+import logging
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,7 @@ _DATA_ATTR_RE = re.compile(
     r"\b(?P<name>data-[\w-]+)\s*=\s*(['\"])(?P<value>.*?)\2",
     re.IGNORECASE | re.DOTALL,
 )
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -752,28 +754,31 @@ def _composition_html_metadata(project: Path) -> dict[str, dict[str, Any]]:
     for html_path in project.rglob("*.html"):
         if "node_modules" in html_path.parts:
             continue
-        with contextlib.suppress(OSError, UnicodeDecodeError):
+        try:
             content = html_path.read_text(encoding="utf-8")
-            for tag_match in _COMPOSITION_TAG_RE.finditer(content):
-                attrs = {
-                    attr.group("name").lower(): html.unescape(attr.group("value").strip())
-                    for attr in _DATA_ATTR_RE.finditer(tag_match.group(0))
-                }
-                comp_id = attrs.get("data-composition-id") or html.unescape(tag_match.group("id").strip())
-                if not comp_id:
-                    continue
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning("Skipping Hyperframes composition metadata file %s: %s", html_path, e)
+            continue
+        for tag_match in _COMPOSITION_TAG_RE.finditer(content):
+            attrs = {
+                attr.group("name").lower(): html.unescape(attr.group("value").strip())
+                for attr in _DATA_ATTR_RE.finditer(tag_match.group(0))
+            }
+            comp_id = attrs.get("data-composition-id") or html.unescape(tag_match.group("id").strip())
+            if not comp_id:
+                continue
 
-                item: dict[str, Any] = {}
-                if duration := attrs.get("data-duration") or attrs.get("data-duration-seconds"):
-                    item["_html_duration"] = duration
-                if fps := attrs.get("data-fps"):
-                    item["_html_fps"] = fps
-                if width := attrs.get("data-width"):
-                    item["_html_width"] = width
-                if height := attrs.get("data-height"):
-                    item["_html_height"] = height
-                if item:
-                    metadata[comp_id] = {**metadata.get(comp_id, {}), **item}
+            item: dict[str, Any] = {}
+            if duration := attrs.get("data-duration") or attrs.get("data-duration-seconds"):
+                item["_html_duration"] = duration
+            if fps := attrs.get("data-fps"):
+                item["_html_fps"] = fps
+            if width := attrs.get("data-width"):
+                item["_html_width"] = width
+            if height := attrs.get("data-height"):
+                item["_html_height"] = height
+            if item:
+                metadata[comp_id] = {**metadata.get(comp_id, {}), **item}
     return metadata
 
 
@@ -790,12 +795,16 @@ def _coerce_positive_float(value: Any) -> float | None:
     return None
 
 
-def _composition_duration_frames(data: dict[str, Any]) -> int:
-    fps = (
+def _effective_composition_fps(data: dict[str, Any]) -> float:
+    return (
         _coerce_positive_float(data.get("fps"))
         or _coerce_positive_float(data.get("_html_fps"))
         or DEFAULT_COMPOSITION_FPS
     )
+
+
+def _composition_duration_frames(data: dict[str, Any]) -> int:
+    fps = _effective_composition_fps(data)
     frame_value = data.get("durationInFrames", data.get("duration_in_frames"))
     frames = _coerce_float(frame_value)
     if frames and frames > 0:
@@ -828,9 +837,7 @@ def compositions(
                 id=comp_id,
                 width=merged.get("width", merged.get("_html_width", DEFAULT_COMPOSITION_WIDTH)),
                 height=merged.get("height", merged.get("_html_height", DEFAULT_COMPOSITION_HEIGHT)),
-                fps=_coerce_positive_float(merged.get("fps"))
-                or _coerce_positive_float(merged.get("_html_fps"))
-                or DEFAULT_COMPOSITION_FPS,
+                fps=_effective_composition_fps(merged),
                 duration_in_frames=_composition_duration_frames(merged),
                 default_props=merged.get("defaultProps", {}),
             )
