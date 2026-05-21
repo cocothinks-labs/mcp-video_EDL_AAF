@@ -773,7 +773,7 @@ def _composition_html_metadata(project: Path) -> dict[str, dict[str, Any]]:
                 if height := attrs.get("data-height"):
                     item["_html_height"] = height
                 if item:
-                    metadata[comp_id] = item
+                    metadata[comp_id] = {**metadata.get(comp_id, {}), **item}
     return metadata
 
 
@@ -783,8 +783,19 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
+def _coerce_positive_float(value: Any) -> float | None:
+    number = _coerce_float(value)
+    if number and number > 0:
+        return number
+    return None
+
+
 def _composition_duration_frames(data: dict[str, Any]) -> int:
-    fps = _coerce_float(data.get("fps", data.get("_html_fps"))) or DEFAULT_COMPOSITION_FPS
+    fps = (
+        _coerce_positive_float(data.get("fps"))
+        or _coerce_positive_float(data.get("_html_fps"))
+        or DEFAULT_COMPOSITION_FPS
+    )
     frame_value = data.get("durationInFrames", data.get("duration_in_frames"))
     frames = _coerce_float(frame_value)
     if frames and frames > 0:
@@ -817,7 +828,9 @@ def compositions(
                 id=comp_id,
                 width=merged.get("width", merged.get("_html_width", DEFAULT_COMPOSITION_WIDTH)),
                 height=merged.get("height", merged.get("_html_height", DEFAULT_COMPOSITION_HEIGHT)),
-                fps=merged.get("fps", merged.get("_html_fps", DEFAULT_COMPOSITION_FPS)),
+                fps=_coerce_positive_float(merged.get("fps"))
+                or _coerce_positive_float(merged.get("_html_fps"))
+                or DEFAULT_COMPOSITION_FPS,
                 duration_in_frames=_composition_duration_frames(merged),
                 default_props=merged.get("defaultProps", {}),
             )

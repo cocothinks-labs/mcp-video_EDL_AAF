@@ -701,6 +701,41 @@ class TestCompositions:
 
         assert result.compositions[0].duration_in_frames == 300
 
+    def test_uses_html_fps_when_cli_reports_zero_fps(self, sample_hyperframes_project):
+        """HTML fps should be used when CLI fps is present but not usable."""
+        project_path = Path(sample_hyperframes_project)
+        (project_path / "index.html").write_text(
+            '<div data-composition-id="main" data-duration="5" data-fps="24"></div>',
+            encoding="utf-8",
+        )
+        comp_json = json.dumps({"id": "main", "fps": 0, "durationInFrames": 0})
+        fake_cp = _make_completed_process(stdout=comp_json)
+
+        with _mock_deps_ok(), patch("mcp_video.hyperframes_engine.subprocess.run", return_value=fake_cp):
+            result = compositions(str(project_path))
+
+        assert result.compositions[0].fps == 24
+        assert result.compositions[0].duration_in_frames == 120
+
+    def test_merges_repeated_html_composition_metadata(self, sample_hyperframes_project):
+        """Repeated composition tags should combine fallback metadata instead of overwriting it."""
+        project_path = Path(sample_hyperframes_project)
+        (project_path / "index.html").write_text(
+            '<div data-composition-id="main" data-duration="5"></div>'
+            '<div data-composition-id="main" data-width="1080" data-height="1920"></div>',
+            encoding="utf-8",
+        )
+        comp_json = json.dumps({"id": "main", "fps": 0, "durationInFrames": 0})
+        fake_cp = _make_completed_process(stdout=comp_json)
+
+        with _mock_deps_ok(), patch("mcp_video.hyperframes_engine.subprocess.run", return_value=fake_cp):
+            result = compositions(str(project_path))
+
+        comp = result.compositions[0]
+        assert comp.width == 1080
+        assert comp.height == 1920
+        assert comp.duration_in_frames == 150
+
     def test_handles_invalid_json(self, sample_hyperframes_project):
         """compositions() should return empty list when JSON is invalid."""
         project = str(sample_hyperframes_project)
