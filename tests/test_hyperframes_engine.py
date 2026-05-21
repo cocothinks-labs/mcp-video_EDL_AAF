@@ -150,6 +150,20 @@ class TestRequireHyperframesDeps:
 
         assert _hyperframes_command_prefix() == ["/opt/hyperframes/bin/hyperframes", "--project-root", "/srv/app"]
 
+    def test_preserves_unquoted_windows_hyperframes_command_path(self, monkeypatch):
+        monkeypatch.setenv(HYPERFRAMES_COMMAND_ENV, r"C:\Program Files\Hyperframes\hyperframes.cmd")
+
+        assert _hyperframes_command_prefix() == [r"C:\Program Files\Hyperframes\hyperframes.cmd"]
+
+    def test_preserves_unquoted_windows_hyperframes_command_path_with_args(self, monkeypatch):
+        monkeypatch.setenv(HYPERFRAMES_COMMAND_ENV, r"C:\Program Files\Hyperframes\hyperframes.cmd --profile prod")
+
+        assert _hyperframes_command_prefix() == [
+            r"C:\Program Files\Hyperframes\hyperframes.cmd",
+            "--profile",
+            "prod",
+        ]
+
     def test_prefers_local_node_modules_binary(self, tmp_path, monkeypatch):
         monkeypatch.delenv(HYPERFRAMES_COMMAND_ENV, raising=False)
         expected = _write_local_hyperframes_bin(tmp_path)

@@ -44,6 +44,7 @@ from .hyperframes_models import (
 HYPERFRAMES_COMMAND_ENV = "MCP_VIDEO_HYPERFRAMES_COMMAND"
 HYPERFRAMES_COMMAND_PREFIX = ["hyperframes"]
 _HYPERFRAMES_BINARY_NAMES = ("hyperframes", "hyperframes.cmd")
+_WINDOWS_COMMAND_PATH_RE = re.compile(r"^([A-Za-z]:\\.*?\.(?:bat|cmd|exe|ps1))(?=\s|$)", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +79,26 @@ def _find_local_hyperframes_binary(cwd: str | Path | None) -> Path | None:
     return None
 
 
+def _split_configured_hyperframes_command(value: str) -> list[str]:
+    configured = value.strip()
+    if not configured:
+        return []
+
+    candidate = Path(configured).expanduser()
+    if candidate.is_file():
+        return [str(candidate)]
+
+    windows_match = _WINDOWS_COMMAND_PATH_RE.match(configured)
+    if windows_match:
+        command = windows_match.group(1)
+        rest = configured[windows_match.end() :].strip()
+        if not rest:
+            return [command]
+        return [command, *[part.strip('"') for part in shlex.split(rest, posix=False)]]
+
+    return [part.strip('"') for part in shlex.split(configured, posix=os.name != "nt")]
+
+
 def _hyperframes_command_prefix(
     cwd: str | Path | None = None,
     *,
@@ -88,7 +109,7 @@ def _hyperframes_command_prefix(
     which_fn = shutil.which if which is None else which
     configured = env_map.get(HYPERFRAMES_COMMAND_ENV)
     if configured is not None:
-        command = shlex.split(configured)
+        command = _split_configured_hyperframes_command(configured)
         if command:
             return command
         raise HyperframesNotFoundError(f"{HYPERFRAMES_COMMAND_ENV} is set but empty")
