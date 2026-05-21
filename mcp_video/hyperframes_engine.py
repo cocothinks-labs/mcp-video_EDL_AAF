@@ -18,6 +18,7 @@ import time
 import contextlib
 import html
 import logging
+import math
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -801,9 +802,12 @@ def _coerce_positive_int(value: Any) -> int | None:
         if value.lower().endswith("px"):
             value = value[:-2].strip()
     number = _coerce_float(value)
-    if number is None:
+    if number is None or not math.isfinite(number):
         return None
-    integer = int(number)
+    try:
+        integer = int(number)
+    except (OverflowError, ValueError):
+        return None
     if integer > 0 and float(integer) == float(number):
         return integer
     return None

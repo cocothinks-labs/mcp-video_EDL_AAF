@@ -8,6 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mcp_video.defaults import DEFAULT_COMPOSITION_HEIGHT, DEFAULT_COMPOSITION_WIDTH
+from mcp_video.errors import (
+    HyperframesNotFoundError,
+    HyperframesProjectError,
+    HyperframesRenderError,
+    InputFileError,
+    MCPVideoError,
+)
 from mcp_video.hyperframes_engine import (
     HYPERFRAMES_COMMAND_ENV,
     _hyperframes_command_prefix,
@@ -31,13 +39,6 @@ from mcp_video.hyperframes_engine import (
     transcribe,
     tts,
     validate,
-)
-from mcp_video.errors import (
-    HyperframesNotFoundError,
-    HyperframesProjectError,
-    HyperframesRenderError,
-    InputFileError,
-    MCPVideoError,
 )
 
 
@@ -741,7 +742,7 @@ class TestCompositions:
         project_path = Path(sample_hyperframes_project)
         (project_path / "index.html").write_text(
             '<div data-composition-id="main" data-width="1080px" data-height="1920.0"></div>'
-            '<div data-composition-id="bad" data-width="wide" data-height="tall"></div>',
+            '<div data-composition-id="bad" data-width="inf" data-height="nan"></div>',
             encoding="utf-8",
         )
         comp_json = json.dumps(
@@ -758,8 +759,8 @@ class TestCompositions:
         main, bad = result.compositions
         assert main.width == 1080
         assert main.height == 1920
-        assert bad.width == 1920
-        assert bad.height == 1080
+        assert bad.width == DEFAULT_COMPOSITION_WIDTH
+        assert bad.height == DEFAULT_COMPOSITION_HEIGHT
 
     def test_handles_invalid_json(self, sample_hyperframes_project):
         """compositions() should return empty list when JSON is invalid."""
