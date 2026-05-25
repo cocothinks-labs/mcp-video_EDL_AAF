@@ -16,7 +16,7 @@ from .ffmpeg_helpers import (
     _build_ffmpeg_cmd,
     _run_ffmpeg,
 )
-from .ffmpeg_helpers import _validate_input_path, _validate_output_path
+from .ffmpeg_helpers import _escape_ffmpeg_filter_value, _validate_input_path, _validate_output_path
 from .validation import _validate_normalized_float
 from .models import EditResult, NamedPosition, Position
 
@@ -34,7 +34,7 @@ def watermark(
     """Add an image watermark to a video."""
     input_path = _validate_input_path(input_path)
     image_path = _validate_input_path(image_path)
-    _validate_normalized_float(opacity, "opacity")
+    safe_opacity = _validate_normalized_float(opacity, "opacity")
     output = output_path or _auto_output(input_path, "watermarked")
     _validate_output_path(output)
 
@@ -53,7 +53,7 @@ def watermark(
 
     overlay_pos = _resolve_position(position, position_map, "bottom-right")
     # Format opacity for FFmpeg (0.0 to 1.0)
-    opacity_fmt = f"{opacity:.2f}"
+    opacity_fmt = _escape_ffmpeg_filter_value(f"{safe_opacity:.2f}")
 
     with _timed_operation() as timing:
         _run_ffmpeg(
