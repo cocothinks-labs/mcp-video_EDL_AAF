@@ -27,8 +27,8 @@ VALID_XFADE_TRANSITIONS = {
     "smoothup",
     "smoothdown",
 }
-VALID_WAVEFORMS = {"sine", "square", "sawtooth", "triangle", "noise"}
-VALID_AUDIO_EFFECT_TYPES = {"lowpass", "highpass", "reverb", "normalize", "fade"}
+VALID_WAVEFORMS = {"sine", "square", "sawtooth", "triangle", "noise", "pulse", "supersaw", "pluck", "fm"}
+VALID_AUDIO_EFFECT_TYPES = {"lowpass", "highpass", "reverb", "normalize", "fade", "delay", "chorus", "flanger", "distortion", "compressor", "eq", "tremolo", "vibrato"}
 VALID_SPATIAL_METHODS = {"hrtf", "panning"}
 VALID_MOGRAPH_STYLES = {"bar", "circle", "dots"}
 VALID_LAYOUTS = {"side-by-side", "top-bottom"}
@@ -54,6 +54,13 @@ VALID_AUDIO_PRESETS = {
     "chime-success",
     "chime-error",
     "chime-notification",
+    "bass-kick",
+    "snare",
+    "hi-hat",
+    "alarm",
+    "notify",
+    "confirm",
+    "cancel",
     "data-flow",
     "typing",
     "scan",
