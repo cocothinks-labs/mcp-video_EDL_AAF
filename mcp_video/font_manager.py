@@ -81,7 +81,7 @@ def resolve_font(font_name: str) -> str:
         return local_path
 
     try:
-        urllib.request.urlretrieve(url, local_path)
+        urllib.request.urlretrieve(url, local_path)  # noqa: S310
     except urllib.error.URLError as exc:
         raise MCPVideoError(
             f"Failed to download font '{font_name}': {exc}",

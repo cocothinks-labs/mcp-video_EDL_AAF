@@ -148,7 +148,7 @@ def _parse_ffmpeg_version(version_line: str | None) -> int | None:
 
 def _command_version(command: list[str]) -> str | None:
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=DOCTOR_COMMAND_TIMEOUT)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=DOCTOR_COMMAND_TIMEOUT)  # noqa: S603
     except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode != 0:

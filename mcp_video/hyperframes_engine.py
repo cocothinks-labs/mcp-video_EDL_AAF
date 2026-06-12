@@ -185,7 +185,7 @@ def _run_hyperframes(
     """Run a Hyperframes command and return the CompletedProcess."""
     cmd = [*_hyperframes_command_prefix(cwd=cwd), *args]
     try:
-        return subprocess.run(
+        return subprocess.run(  # noqa: S603
             cmd,
             cwd=str(cwd),
             capture_output=True,
@@ -880,7 +880,7 @@ def preview(
     _require_hyperframes_deps(cwd=project)
 
     cmd = [*_hyperframes_command_prefix(cwd=project), "preview", str(project), "--port", str(port)]
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603
         cmd,
         cwd=str(project),
         stdout=subprocess.DEVNULL,

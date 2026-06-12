@@ -46,7 +46,7 @@ def detect_scenes(
         "-",
     ]
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,

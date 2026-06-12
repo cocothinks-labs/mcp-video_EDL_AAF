@@ -57,13 +57,13 @@ def ping(event: str = "startup", metadata: dict[str, Any] | None = None) -> None
     }
 
     try:
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310
             _ANALYTICS_ENDPOINT,
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with urllib.request.urlopen(req, timeout=3) as resp:  # noqa: S310
             resp.read()
     except Exception:
         # Analytics failures must never block the user

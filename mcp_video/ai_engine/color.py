@@ -119,7 +119,7 @@ def ai_color_grade(
     _validate_output_path(output)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
     except subprocess.TimeoutExpired:
         raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
     if result.returncode != 0:
@@ -146,7 +146,7 @@ def _match_reference_colors(video: str, reference: str) -> dict:
         """Extract mean RGB values from video using signalstats filter."""
         cmd = ["ffmpeg", "-i", video_path, "-vf", "signalstats", "-f", "null", "-"]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
         except subprocess.TimeoutExpired:
             raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
         if result.returncode != 0:

@@ -151,9 +151,7 @@ def merge(
     # graph (it would reference an [i:a] pad that does not exist).
     mixed_audio = any(audio_flags) and not all(audio_flags)
 
-    needs_normalize = (
-        len(resolutions) > 1 or len(codecs) > 1 or len(fps_set) > 1 or len(audio_rates) > 1 or mixed_audio
-    )
+    needs_normalize = len(resolutions) > 1 or len(codecs) > 1 or len(fps_set) > 1 or len(audio_rates) > 1 or mixed_audio
     target_w = max(i.display_width for i in infos)
     target_h = max(i.display_height for i in infos)
 

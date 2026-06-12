@@ -38,7 +38,7 @@ def _require_api_key() -> str:
 
 def _post_json(url: str, payload: dict[str, Any], api_key: str, timeout: int) -> dict[str, Any]:
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
+    req = urllib.request.Request(  # noqa: S310
         url,
         data=data,
         headers={
@@ -48,7 +48,7 @@ def _post_json(url: str, payload: dict[str, Any], api_key: str, timeout: int) ->
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:500]
@@ -75,9 +75,9 @@ def _download_url(url: str, output_path: str, timeout: int) -> None:
             error_type="validation_error",
             code="ssrf_blocked",
         )
-    req = urllib.request.Request(url, headers={"User-Agent": "mcp-video/1.4.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "mcp-video/1.4.0"})  # noqa: S310
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp, open(output_path, "wb") as f:
+        with urllib.request.urlopen(req, timeout=timeout) as resp, open(output_path, "wb") as f:  # noqa: S310
             f.write(resp.read())
     except urllib.error.URLError as exc:
         raise MCPVideoError(

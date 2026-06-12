@@ -156,7 +156,8 @@ def _run_command(cmd: list[str], timeout: int = DEFAULT_FFMPEG_TIMEOUT) -> subpr
             break
     cmd_str = " ".join(cmd)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        # cmd is always a list built from trusted internal ffmpeg/ffprobe paths; no shell=True
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603
     except subprocess.TimeoutExpired:
         raise ProcessingError(cmd_str, -1, f"FFmpeg command timed out after {timeout}s") from None
     if result.returncode != 0:
@@ -177,7 +178,8 @@ def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
 
     cmd = list(args) if args and args[0] in {"ffmpeg", "ffprobe"} else [_ffmpeg(), "-y", *args]
     try:
-        proc = subprocess.run(
+        # cmd is always a list-form ffmpeg/ffprobe invocation; no shell=True
+        proc = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,
@@ -218,7 +220,7 @@ def _run_ffmpeg_with_progress(
         return _run_ffmpeg(args)
 
     cmd = [_ffmpeg(), "-y", *args]
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603
         cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

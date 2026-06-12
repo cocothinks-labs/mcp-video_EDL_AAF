@@ -25,7 +25,7 @@ try:
     from .analytics import ping
 
     ping(event="server_start")
-except Exception:
+except Exception:  # noqa: S110
     pass
 
 logger = logging.getLogger(__name__)

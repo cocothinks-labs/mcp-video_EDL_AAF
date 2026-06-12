@@ -113,11 +113,11 @@ def _download_fsrcnn_model(scale: int) -> Path:
         print(f"Downloading FSRCNN x{scale} model...")
         tmp_model = model_path.with_suffix(".tmp")
         max_model_bytes = 500 * (1 << 20)  # 500 MiB limit
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url)  # noqa: S310
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = True
         ssl_context.verify_mode = ssl.CERT_REQUIRED
-        with urllib.request.urlopen(req, timeout=120, context=ssl_context) as resp, open(tmp_model, "wb") as fh:
+        with urllib.request.urlopen(req, timeout=120, context=ssl_context) as resp, open(tmp_model, "wb") as fh:  # noqa: S310
             total = 0
             while True:
                 chunk = resp.read(1 << 20)  # 1 MiB

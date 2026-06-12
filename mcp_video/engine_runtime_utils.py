@@ -56,7 +56,7 @@ def _check_filter_available(name: str) -> bool:
     """Check if an FFmpeg filter is available."""
     global _AVAILABLE_FILTERS
     if _AVAILABLE_FILTERS is None:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603
             [_ffmpeg(), "-filters"],
             capture_output=True,
             text=True,
@@ -150,7 +150,7 @@ def _generate_thumbnail_base64(video_path: str) -> str | None:
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             tmp_path = tmp.name
 
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603
             [
                 _ffmpeg(),
                 "-y",

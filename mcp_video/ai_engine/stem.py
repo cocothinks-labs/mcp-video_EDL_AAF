@@ -115,7 +115,7 @@ def ai_stem_separation(
             audio_path,
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
         except subprocess.TimeoutExpired:
             raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
         if result.returncode != 0:
@@ -137,7 +137,7 @@ def ai_stem_separation(
         # Run demucs separation with a timeout.
         demucs_cmd = [sys.executable, "-m", "demucs.separate", *demucs_args]
         try:
-            result = subprocess.run(demucs_cmd, capture_output=True, text=True, timeout=DEFAULT_AI_TIMEOUT)
+            result = subprocess.run(demucs_cmd, capture_output=True, text=True, timeout=DEFAULT_AI_TIMEOUT)  # noqa: S603
         except subprocess.TimeoutExpired:
             raise ProcessingError(
                 " ".join(demucs_cmd), -1, f"Demucs command timed out after {DEFAULT_AI_TIMEOUT}s"
