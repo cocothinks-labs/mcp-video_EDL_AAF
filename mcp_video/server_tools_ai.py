@@ -192,7 +192,16 @@ def video_ai_color_grade(
     reference_path: str | None = None,
     style: str = "auto",
 ) -> dict[str, Any]:
-    """Auto color grade video."""
+    """Apply a color grade to a video, by style preset or by matching a reference video.
+
+    Args:
+        input_path: Video file to grade.
+        output_path: Where to write the graded video.
+        reference_path: Optional reference video — when given, the video's
+            color balance is adjusted to match the reference (overrides style).
+        style: Style preset. One of: auto (gentle contrast lift), warm, cool,
+            vintage, cinematic, dramatic, noir (high contrast, desaturated).
+    """
     if style not in VALID_COLOR_GRADE_STYLES:
         return _validation_error(f"Invalid style: must be one of {sorted(VALID_COLOR_GRADE_STYLES)}, got '{style}'")
     input_path = _validate_input_path(input_path)

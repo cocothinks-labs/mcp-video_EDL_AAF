@@ -44,7 +44,7 @@ Plan video generation like a director of photography before rendering. These too
 | `video_add_text` | Overlay text with positioning, font, color, shadow |
 | `video_add_audio` | Add, replace, or mix audio tracks with fade effects; validates volume and warns on timing/sample-rate risks |
 | `video_resize` | Change resolution or apply preset aspect ratios (16:9, 9:16, 1:1, etc.) |
-| `video_convert` | Convert between mp4, webm, gif, mov (two-pass encoding) |
+| `video_convert` | Convert between mp4, webm, gif, mov, hevc, av1, prores (two-pass encoding) |
 | `video_speed` | Speed up or slow down (0.5x = slow-mo, 2x = time-lapse) |
 | `video_reverse` | Reverse video and audio playback |
 | `video_fade` | Fade in/out effects |

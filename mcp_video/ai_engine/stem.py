@@ -71,12 +71,12 @@ def ai_stem_separation(
         importlib.import_module("demucs.separate")
     except ImportError:
         raise MCPVideoError(
-            "Demucs not installed. Install with: pip install demucs",
+            'Demucs not installed. Install with: pip install "mcp-video[stems]"',
             error_type="dependency_error",
             code="missing_demucs",
             suggested_action={
                 "auto_fix": False,
-                "description": "Install demucs to enable stem separation",
+                "description": 'Run: pip install "mcp-video[stems]" to enable stem separation',
             },
         ) from None
 

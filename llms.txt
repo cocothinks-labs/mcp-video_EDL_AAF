@@ -11,6 +11,7 @@ mcp-video gives AI agents 119 structured tools for FFmpeg-based video editing, P
 - Cinematic video prompt planning with STYLE_/NEG_ blocks and storyboard tables
 - Hyperframes 0.5 rendering, snapshots, inspection, catalog blocks, website capture, local TTS, transcription, background removal, diagnostics, and benchmarks
 - Local repurposing packages for Shorts, Reels, TikTok, and YouTube variants
+- Creative glitch and shader effects (RGB shift, VHS tracking, slit-scan, datamosh, CRT, pixel sorting, depth splatting)
 - Python video editing scripts
 - CLI video operations
 - Video QA checkpoints for generated media
@@ -43,4 +44,4 @@ Invoke `$mcp-video` in compatible agent hosts when the user wants local media in
 mcp-video is listed on the [official MCP Registry](https://registry.modelcontextprotocol.io/servers/io.github.KyaniteLabs/mcp-video) as `io.github.KyaniteLabs/mcp-video`. Registry metadata is in `server.json` at the repo root.
 
 ## Keywords
-video editing MCP server, guardrailed video editing MCP server, AI agent video editing, safe agentic media automation, cinematic video storyboard MCP, AI video style pack, FFmpeg automation, Claude Code video tools, Cursor MCP video tools, Codex video automation, Python video library, video automation CLI, Model Context Protocol, Hyperframes, local TTS, video background removal, subtitles, reels automation, shorts automation, video repurposing.
+video editing MCP server, guardrailed video editing MCP server, AI agent video editing, safe agentic media automation, cinematic video storyboard MCP, AI video style pack, FFmpeg automation, Claude Code video tools, Cursor MCP video tools, Codex video automation, Python video library, video automation CLI, Model Context Protocol, Hyperframes, local TTS, video background removal, subtitles, reels automation, shorts automation, video repurposing, glitch art video, vhs effect mcp, video shader effects.

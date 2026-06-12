@@ -97,6 +97,21 @@ mcp-video doctor
 
 Hyperframes tools additionally need Node.js 22+ and a resolvable Hyperframes CLI. Install/pin Hyperframes in the active Node package layout, add `hyperframes` to `PATH`, or set `MCP_VIDEO_HYPERFRAMES_COMMAND`.
 
+### Which extra do I need?
+
+The core install covers all FFmpeg editing tools. Optional features ship as extras — install only what you use:
+
+| You want | Install | Approx. extra size |
+|---|---|---|
+| Speech-to-text subtitles (Whisper) | `pip install "mcp-video[transcribe]"` | ~1 GB (torch) |
+| Image analysis (colors, layout, contrast) | `pip install "mcp-video[image]"` | ~50 MB |
+| Vocal/instrument stem separation | `pip install "mcp-video[stems]"` | ~2 GB (torch + demucs) |
+| AI upscaling | `pip install "mcp-video[upscale]"` | ~2 GB (Python ≤3.12) |
+| Procedural audio/music tools | `pip install "mcp-video[audio]"` | ~30 MB (numpy) |
+| Everything AI | `pip install "mcp-video[ai]"` | several GB |
+
+Mix freely, e.g. `pip install "mcp-video[transcribe,image]"`. Run `mcp-video doctor` afterward — it reports exactly which features are available and what is missing.
+
 ## Quick Start
 
 ### Try the receipt-backed proof first

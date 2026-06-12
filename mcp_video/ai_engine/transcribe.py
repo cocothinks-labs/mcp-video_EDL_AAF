@@ -71,12 +71,12 @@ def ai_transcribe(
         import whisper
     except ImportError:
         raise MCPVideoError(
-            "Whisper not installed. Install with: pip install openai-whisper",
+            'Whisper not installed. Install with: pip install "mcp-video[transcribe]"',
             error_type="dependency_error",
             code="missing_whisper",
             suggested_action={
                 "auto_fix": False,
-                "description": "Install openai-whisper to enable transcription",
+                "description": 'Run: pip install "mcp-video[transcribe]" to enable transcription',
             },
         ) from None
 
