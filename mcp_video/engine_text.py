@@ -102,6 +102,9 @@ def add_text(
 
     filter_parts = [
         f"drawtext=text='{escaped_text}'",
+        # User text is literal — without this, drawtext interprets %{...} as
+        # expansion tokens (e.g. "50%{off}" errors or renders timestamps).
+        "expansion=none",
         f"fontsize={size}",
         f"fontcolor={escaped_color}",
         f"fontfile={escaped_fontfile}",
@@ -260,6 +263,7 @@ def add_texts(
 
         parts = [
             f"drawtext=text='{escaped_text}'",
+            "expansion=none",
             f"fontsize={overlay.size}",
             f"fontcolor={escaped_color}",
             f"fontfile={escaped_fontfile}",

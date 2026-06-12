@@ -109,8 +109,8 @@ def _split_filter(left_width: int, left_height: int, right_width: int, right_hei
         target_h = _safe_dimension(max(left_height, right_height), "target_h")
         if left_height != right_height:
             return (
-                f"[0:v]scale=-1:{target_h},setsar=1[left];"
-                f"[1:v]scale=-1:{target_h},setsar=1[right];"
+                f"[0:v]scale=-2:{target_h},setsar=1[left];"
+                f"[1:v]scale=-2:{target_h},setsar=1[right];"
                 f"[left][right]hstack=inputs=2[v]"
             )
         return "[0:v][1:v]hstack=inputs=2[v]"
@@ -118,8 +118,8 @@ def _split_filter(left_width: int, left_height: int, right_width: int, right_hei
     target_w = _safe_dimension(max(left_width, right_width), "target_w")
     if left_width != right_width:
         return (
-            f"[0:v]scale={target_w}:-1,setsar=1[top];"
-            f"[1:v]scale={target_w}:-1,setsar=1[bottom];"
+            f"[0:v]scale={target_w}:-2,setsar=1[top];"
+            f"[1:v]scale={target_w}:-2,setsar=1[bottom];"
             f"[top][bottom]vstack=inputs=2[v]"
         )
     return "[0:v][1:v]vstack=inputs=2[v]"

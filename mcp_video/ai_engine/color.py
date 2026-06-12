@@ -13,11 +13,23 @@ import re
 import subprocess
 from pathlib import Path
 
-from ..errors import InputFileError, ProcessingError
+from ..errors import InputFileError, MCPVideoError, ProcessingError
 from ..ffmpeg_helpers import _validate_input_path, _validate_output_path
 from ..limits import DEFAULT_FFMPEG_TIMEOUT
 
 logger = logging.getLogger(__name__)
+
+# Style presets define color adjustments. Every style accepted by
+# validation.VALID_COLOR_GRADE_STYLES must have an entry here.
+STYLE_PRESETS: dict[str, dict[str, float]] = {
+    "cinematic": {"contrast": 1.1, "saturation": 0.9, "gamma": 1.0, "red": 1.05, "green": 1.0, "blue": 0.95},
+    "vintage": {"contrast": 0.9, "saturation": 0.7, "gamma": 1.1, "red": 1.1, "green": 0.95, "blue": 0.8},
+    "warm": {"contrast": 1.0, "saturation": 1.05, "gamma": 1.0, "red": 1.1, "green": 1.0, "blue": 0.9},
+    "cool": {"contrast": 1.0, "saturation": 0.95, "gamma": 1.0, "red": 0.9, "green": 1.0, "blue": 1.1},
+    "dramatic": {"contrast": 1.3, "saturation": 1.1, "gamma": 0.9, "red": 1.0, "green": 1.0, "blue": 1.0},
+    "noir": {"contrast": 1.3, "saturation": 0.2, "gamma": 0.95, "red": 1.0, "green": 1.0, "blue": 1.0},
+    "auto": {"contrast": 1.05, "saturation": 1.0, "gamma": 1.0, "red": 1.0, "green": 1.0, "blue": 1.0},
+}
 
 
 def ai_color_grade(
@@ -32,7 +44,7 @@ def ai_color_grade(
         video: Input video path
         output: Output video path
         reference: Optional reference video for color matching
-        style: Style preset (auto, cinematic, vintage, warm, cool, dramatic)
+        style: Style preset (auto, cinematic, vintage, warm, cool, dramatic, noir)
 
     Returns:
         Path to output video
@@ -48,18 +60,14 @@ def ai_color_grade(
     if not video_path.exists():
         raise InputFileError(video)
 
-    # Style presets define color adjustments
-    style_presets = {
-        "cinematic": {"contrast": 1.1, "saturation": 0.9, "gamma": 1.0, "red": 1.05, "green": 1.0, "blue": 0.95},
-        "vintage": {"contrast": 0.9, "saturation": 0.7, "gamma": 1.1, "red": 1.1, "green": 0.95, "blue": 0.8},
-        "warm": {"contrast": 1.0, "saturation": 1.05, "gamma": 1.0, "red": 1.1, "green": 1.0, "blue": 0.9},
-        "cool": {"contrast": 1.0, "saturation": 0.95, "gamma": 1.0, "red": 0.9, "green": 1.0, "blue": 1.1},
-        "dramatic": {"contrast": 1.3, "saturation": 1.1, "gamma": 0.9, "red": 1.0, "green": 1.0, "blue": 1.0},
-        "auto": {"contrast": 1.05, "saturation": 1.0, "gamma": 1.0, "red": 1.0, "green": 1.0, "blue": 1.0},
-    }
-
-    # Get style parameters (default to auto if invalid style provided)
-    params = style_presets.get(style, style_presets["auto"])
+    try:
+        params = STYLE_PRESETS[style]
+    except KeyError:
+        raise MCPVideoError(
+            f"Unknown color grade style '{style}'. Valid styles: {', '.join(sorted(STYLE_PRESETS))}",
+            error_type="validation_error",
+            code="invalid_style",
+        ) from None
 
     # If reference provided, analyze and adjust to match
     if reference:

@@ -55,11 +55,15 @@ def _build_add_audio_args(
     """Construct FFmpeg argument list for add_audio operation."""
     if mix and source_has_audio:
         af = ",".join(filters) if filters else "anull"
-        delay = ""
+        # The added track is one chain: [1:a] -> optional adelay -> filters -> [a1].
+        # Referencing [1:a] a second time mid-chain is invalid filtergraph syntax
+        # even where some FFmpeg builds tolerate it.
         if start_time:
             safe_delay = _escape_ffmpeg_filter_value(str(int(start_time * 1000)))
-            delay = f"[1:a]adelay={safe_delay}|{safe_delay},"
-        filter_complex = f"[0:a]anull[a0];{delay}[1:a]{af}[a1];[a0][a1]amix=inputs=2:duration=longest[aout]"
+            second_chain = f"[1:a]adelay={safe_delay}|{safe_delay},{af}[a1]"
+        else:
+            second_chain = f"[1:a]{af}[a1]"
+        filter_complex = f"[0:a]anull[a0];{second_chain};[a0][a1]amix=inputs=2:duration=longest[aout]"
         return [
             "-i",
             video_path,

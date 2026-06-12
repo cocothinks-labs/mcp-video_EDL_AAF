@@ -23,6 +23,7 @@ from .errors import InputFileError, MCPVideoError
 from .ffmpeg_helpers import _escape_ffmpeg_filter_value, _validate_input_path, _validate_output_path
 from .merge_guardrails import validate_merge_compatibility
 from .models import EditResult
+from .validation import VALID_XFADE_TRANSITIONS
 
 logger = logging.getLogger(__name__)
 
@@ -145,17 +146,25 @@ def merge(
     fps_set = {round(i.fps, 2) for i in infos}
     audio_rates = {i.audio_sample_rate for i in infos if i.audio_sample_rate}
 
-    needs_normalize = len(resolutions) > 1 or len(codecs) > 1 or len(fps_set) > 1 or len(audio_rates) > 1
+    audio_flags = [i.audio_codec is not None for i in infos]
+    # Mixed audio presence breaks both the concat demuxer and the xfade audio
+    # graph (it would reference an [i:a] pad that does not exist).
+    mixed_audio = any(audio_flags) and not all(audio_flags)
+
+    needs_normalize = (
+        len(resolutions) > 1 or len(codecs) > 1 or len(fps_set) > 1 or len(audio_rates) > 1 or mixed_audio
+    )
     target_w = max(i.display_width for i in infos)
     target_h = max(i.display_height for i in infos)
 
     with _timed_operation() as timing:
         tmpdir = tempfile.mkdtemp(prefix="mcp_video_")
         try:
+            source_clips = _add_silent_audio(clips, infos, tmpdir) if mixed_audio else list(clips)
             if needs_normalize:
-                working_clips = _normalize_clips(clips, infos, target_w, target_h, tmpdir)
+                working_clips = _normalize_clips(source_clips, infos, target_w, target_h, tmpdir)
             else:
-                working_clips = list(clips)
+                working_clips = source_clips
 
             output = output_path or _auto_output(clips[0], "merged")
             _validate_output_path(output)
@@ -178,6 +187,39 @@ def merge(
         "merge",
         timing,
     )
+
+
+def _add_silent_audio(clips: list[str], infos: list, tmpdir: str) -> list[str]:
+    """Give audio-less clips a silent track so every clip has the same stream layout."""
+    sample_rate = next((i.audio_sample_rate for i in infos if i.audio_sample_rate), DEFAULT_SAMPLE_RATE)
+    working: list[str] = []
+    for idx, (clip, info) in enumerate(zip(clips, infos, strict=True)):
+        if info.audio_codec is not None:
+            working.append(clip)
+            continue
+        silent_path = os.path.join(tmpdir, f"silent_{idx:04d}.mp4")
+        _run_ffmpeg(
+            [
+                "-i",
+                clip,
+                "-f",
+                "lavfi",
+                "-i",
+                f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}",
+                "-shortest",
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                silent_path,
+            ]
+        )
+        working.append(silent_path)
+    return working
 
 
 def _merge_with_transitions(
@@ -233,6 +275,15 @@ def _merge_with_transitions(
         in2 = labels[i + 1]
         out = f"xt{i}" if i < pairs - 1 else "vout"
         xfade_type = transition_types[i].replace("-", "")
+        # Validate here too, not only at the MCP tool layer — the Python client
+        # and CLI reach this engine directly with unchecked strings.
+        if xfade_type not in VALID_XFADE_TRANSITIONS:
+            raise MCPVideoError(
+                f"Invalid transition '{transition_types[i]}'. "
+                f"Must be one of: {', '.join(sorted(VALID_XFADE_TRANSITIONS))}",
+                error_type="validation_error",
+                code="invalid_transition",
+            )
         safe_xfade = _escape_ffmpeg_filter_value(xfade_type)
         safe_offset = _escape_ffmpeg_filter_value(f"{offsets[i]:.3f}")
         safe_duration = _escape_ffmpeg_filter_value(f"{transition_duration:.3f}")

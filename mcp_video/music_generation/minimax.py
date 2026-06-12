@@ -66,6 +66,15 @@ def _post_json(url: str, payload: dict[str, Any], api_key: str, timeout: int) ->
 
 
 def _download_url(url: str, output_path: str, timeout: int) -> None:
+    from ..ai_engine.download import _is_safe_url
+
+    # The URL comes from an API response body — treat it as untrusted.
+    if not _is_safe_url(url):
+        raise MCPVideoError(
+            f"Blocked MiniMax download URL (SSRF protection): {url}",
+            error_type="validation_error",
+            code="ssrf_blocked",
+        )
     req = urllib.request.Request(url, headers={"User-Agent": "mcp-video/1.4.0"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp, open(output_path, "wb") as f:

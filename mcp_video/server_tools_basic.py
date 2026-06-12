@@ -10,7 +10,7 @@ from pydantic import Field
 from .engine import add_audio, add_text, add_texts, convert, merge, probe, resize, speed, trim
 from .limits import MAX_RESOLUTION, MAX_SPEED_FACTOR, MIN_SPEED_FACTOR, MIN_CRF, MAX_CRF
 from .server_app import _result, _safe_tool, _validation_error, mcp
-from .validation import VALID_FORMATS, VALID_PRESETS
+from .validation import VALID_FORMATS, VALID_PRESETS, VALID_XFADE_TRANSITIONS
 from .models import QUALITY_PRESETS
 from .ffmpeg_helpers import _validate_input_path
 
@@ -73,24 +73,6 @@ def video_trim(
     return _result(
         trim(input_path, start=start, duration=duration, end=end, output_path=output_path, accurate=accurate)
     )
-
-
-VALID_XFADE_TRANSITIONS = {
-    "fade",
-    "dissolve",
-    "wipeleft",
-    "wiperight",
-    "slideleft",
-    "slideright",
-    "slideup",
-    "slidedown",
-    "circlecrop",
-    "radial",
-    "smoothleft",
-    "smoothright",
-    "smoothup",
-    "smoothdown",
-}
 
 
 @mcp.tool(

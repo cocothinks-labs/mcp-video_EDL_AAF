@@ -230,6 +230,7 @@ def _drawtext_filter(elem, width: int, height: int) -> str:
     escaped_text = _escape_ffmpeg_filter_value(elem.text)
     drawtext_parts = [
         f"drawtext=text='{escaped_text}'",
+        "expansion=none",
         f"fontsize={size}",
         f"fontcolor={color}",
         f"fontfile={fontfile}",

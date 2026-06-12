@@ -33,14 +33,17 @@ def subtitles(
 
     # Escape special characters for FFmpeg subtitle filter path
     escaped_sub_path = _escape_ffmpeg_filter_value(subtitle_path)
-    escaped_style = _escape_ffmpeg_filter_value(style)
+    # force_style is ASS `Key=Value,Key=Value` syntax: its separators must stay
+    # literal, so quote the whole value instead of escaping it. Quotes and
+    # backslashes are never valid in ASS style overrides — strip them.
+    sanitized_style = style.replace("\\", "").replace("'", "")
 
     with _timed_operation() as timing:
         _run_ffmpeg(
             _build_ffmpeg_cmd(
                 input_path,
                 output_path=output,
-                video_filter=f"subtitles={escaped_sub_path}:force_style={escaped_style}",
+                video_filter=f"subtitles={escaped_sub_path}:force_style='{sanitized_style}'",
                 audio_codec="copy",
             )
         )

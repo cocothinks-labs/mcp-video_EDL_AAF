@@ -755,7 +755,7 @@ class TestColorGrade:
 
     @requires_ffmpeg
     def test_color_grade_invalid_style(self):
-        """Test that invalid style defaults to auto."""
+        """Unknown styles raise instead of silently grading with `auto`."""
         from mcp_video.ai_engine import ai_color_grade
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -781,9 +781,9 @@ class TestColorGrade:
             ]
             subprocess.run(cmd, capture_output=True, check=True)
 
-            # Invalid style should fall back to auto
-            result = ai_color_grade(input_video, output_video, style="invalid_style")
-            assert os.path.exists(result), "Output should be created even with invalid style"
+            with pytest.raises(MCPVideoError, match="Unknown color grade style"):
+                ai_color_grade(input_video, output_video, style="invalid_style")
+            assert not os.path.exists(output_video), "No output should be written for an invalid style"
 
     def test_color_grade_file_not_found(self):
         """Test that InputFileError is raised for missing input."""
