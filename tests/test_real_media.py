@@ -1,16 +1,20 @@
-"""Real-media integration tests — validates features against iPhone footage.
+"""Codec integration tests — validates features against synthesized media.
 
-These tests use actual camera files from ~/Downloads/ and are marked @pytest.mark.slow.
-They exercise real-world codecs (HEVC/H.264 in MOV containers), variable frame rates,
-alpha-blending with PNG screenshots, and composition of multiple features.
+These tests use FFmpeg lavfi-generated files that exercise real-world codec
+paths: HEVC/H.264 in MOV containers, variable-aspect-ratio inputs, alpha-channel
+PNG overlay compositing, and composition of multiple features.
 
-Run with: pytest tests/test_real_media.py -v -m slow
+Cheap tests (1080p, fast to encode) run without a marker in the default suite.
+Expensive tests (4K, slow to encode) carry @pytest.mark.slow.
+
+Run all including slow: pytest tests/test_real_media.py -m "" -v
 """
 
 from __future__ import annotations
 
-import os
 import shutil
+import subprocess
+import os
 
 import pytest
 
@@ -24,76 +28,313 @@ from mcp_video.engine import (
 from mcp_video.server import video_batch
 
 
-_DOWNLOADS = os.path.expanduser("~/Downloads")
-
-_REAL_FILES = {
-    "landscape_1080": os.path.join(_DOWNLOADS, "IMG_4949_trimmed_1920x1080.mov"),
-    "square_1080": os.path.join(_DOWNLOADS, "IMG_4949_trimmed_1080x1080.mov"),
-    "portrait_1080": os.path.join(_DOWNLOADS, "IMG_4949_trimmed_1080x1920.mov"),
-    "crop_640x480": os.path.join(_DOWNLOADS, "IMG_4949_trimmed_crop_640x480.mov"),
-    "timeline_mp4": os.path.join(_DOWNLOADS, "IMG_4949_trimmed_timeline.mp4"),
-    "video_with_audio": os.path.join(_DOWNLOADS, "IMG_4949_trimmed_audio.mov"),
-}
-
-_PNG_FILES: dict[str, str] = {}
-if os.path.isdir(_DOWNLOADS):
-    for _f in os.listdir(_DOWNLOADS):
-        if _f.endswith(".png") and "Screenshot 2026-02-24" in _f:
-            _PNG_FILES["png_screenshot_1"] = os.path.join(_DOWNLOADS, _f)
-        elif _f.endswith(".png") and "Screenshot 2026-02-25" in _f:
-            _PNG_FILES["png_screenshot_2"] = os.path.join(_DOWNLOADS, _f)
+# ---------------------------------------------------------------------------
+# Encoder availability helpers
+# ---------------------------------------------------------------------------
 
 
-def _require_file(name: str) -> str:
-    path = _REAL_FILES.get(name) or _PNG_FILES.get(name)
-    if path is None or not os.path.isfile(path):
-        pytest.skip(f"Real media file not found: {name} ({path})")
-    return path
+def _has_ffmpeg() -> bool:
+    return shutil.which("ffmpeg") is not None
 
 
-def _require_ffmpeg():
-    if shutil.which("ffmpeg") is None:
+def _has_libx265() -> bool:
+    """Return True if libx265 is compiled into the available ffmpeg."""
+    if not _has_ffmpeg():
+        return False
+    ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
+    encoders_cmd = [ffmpeg_bin, "-encoders"]
+    result = subprocess.run(encoders_cmd, capture_output=True, text=True, timeout=10)
+    return "libx265" in result.stdout
+
+
+def _ffmpeg_run(cmd: list[str], label: str) -> None:
+    """Run an ffmpeg command; skip the test if the command fails."""
+    result = subprocess.run(cmd, capture_output=True, timeout=120)
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace")
+        pytest.skip(f"FFmpeg synthesis failed ({label}): {stderr[-300:]}")
+
+
+# ---------------------------------------------------------------------------
+# Module-scoped synthetic fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def synth_landscape_hevc(tmp_path_factory) -> str:
+    """1920x1080 HEVC-in-MOV, 2 s, no audio — exercises HEVC codec path."""
+    if not _has_ffmpeg():
         pytest.skip("FFmpeg not installed")
+    if not _has_libx265():
+        pytest.skip("libx265 encoder not available")
+    out = str(tmp_path_factory.mktemp("synth") / "landscape_1080_hevc.mov")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=1920x1080:rate=30:duration=2",
+            "-c:v",
+            "libx265",
+            "-tag:v",
+            "hvc1",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            out,
+        ],
+        "landscape HEVC",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create landscape HEVC fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_landscape():
-    return _require_file("landscape_1080")
+@pytest.fixture(scope="module")
+def synth_landscape_hevc_audio(tmp_path_factory) -> str:
+    """1920x1080 HEVC-in-MOV, 2 s, with AAC audio — for normalize_audio tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    if not _has_libx265():
+        pytest.skip("libx265 encoder not available")
+    out = str(tmp_path_factory.mktemp("synth") / "landscape_1080_hevc_audio.mov")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=1920x1080:rate=30:duration=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-c:v",
+            "libx265",
+            "-tag:v",
+            "hvc1",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-shortest",
+            out,
+        ],
+        "landscape HEVC + audio",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create landscape HEVC+audio fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_square():
-    return _require_file("square_1080")
+@pytest.fixture(scope="module")
+def synth_square_hevc(tmp_path_factory) -> str:
+    """1080x1080 HEVC-in-MOV, 2 s — square aspect for PIP overlay tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    if not _has_libx265():
+        pytest.skip("libx265 encoder not available")
+    out = str(tmp_path_factory.mktemp("synth") / "square_1080_hevc.mov")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=1080x1080:rate=30:duration=2",
+            "-c:v",
+            "libx265",
+            "-tag:v",
+            "hvc1",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            out,
+        ],
+        "square HEVC",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create square HEVC fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_portrait():
-    return _require_file("portrait_1080")
+@pytest.fixture(scope="module")
+def synth_portrait_hevc(tmp_path_factory) -> str:
+    """1080x1920 HEVC-in-MOV, 2 s — portrait aspect for split-screen tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    if not _has_libx265():
+        pytest.skip("libx265 encoder not available")
+    out = str(tmp_path_factory.mktemp("synth") / "portrait_1080_hevc.mov")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=1080x1920:rate=30:duration=2",
+            "-c:v",
+            "libx265",
+            "-tag:v",
+            "hvc1",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            out,
+        ],
+        "portrait HEVC",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create portrait HEVC fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_crop():
-    return _require_file("crop_640x480")
+@pytest.fixture(scope="module")
+def synth_crop_h264(tmp_path_factory) -> str:
+    """640x480 H.264-in-MOV, 2 s — small crop resolution for batch tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    out = str(tmp_path_factory.mktemp("synth") / "crop_640x480.mov")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x480:rate=30:duration=2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "23",
+            out,
+        ],
+        "640x480 H.264",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create 640x480 H.264 fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_mp4():
-    return _require_file("timeline_mp4")
+@pytest.fixture(scope="module")
+def synth_timeline_mp4(tmp_path_factory) -> str:
+    """1920x1080 H.264 MP4, 2 s, with AAC audio — for filter-chain tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    out = str(tmp_path_factory.mktemp("synth") / "timeline.mp4")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "smptehdbars=size=1920x1080:duration=2:rate=30",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-shortest",
+            out,
+        ],
+        "timeline MP4",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create timeline MP4 fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_png():
-    return _require_file("png_screenshot_1")
+@pytest.fixture(scope="module")
+def synth_alpha_png(tmp_path_factory) -> str:
+    """320x240 RGBA PNG — semi-transparent overlay for alpha compositing tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    out = str(tmp_path_factory.mktemp("synth") / "alpha_overlay.png")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red@0.5:size=320x240,format=rgba",
+            "-frames:v",
+            "1",
+            "-update",
+            "1",
+            out,
+        ],
+        "alpha PNG",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create alpha PNG fixture")
+    return out
 
 
-@pytest.fixture(scope="session")
-def real_video_with_audio():
-    return _require_file("video_with_audio")
+@pytest.fixture(scope="module")
+def synth_4k_hevc(tmp_path_factory) -> str:
+    """3840x2160 HEVC-in-MOV, 2 s — 4K fixture for slow tests."""
+    if not _has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+    if not _has_libx265():
+        pytest.skip("libx265 encoder not available")
+    out = str(tmp_path_factory.mktemp("synth") / "4k_hevc.mov")
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=3840x2160:rate=24:duration=2",
+            "-c:v",
+            "libx265",
+            "-tag:v",
+            "hvc1",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "ultrafast",
+            out,
+        ],
+        "4K HEVC",
+    )
+    if not os.path.isfile(out):
+        pytest.skip("Failed to create 4K HEVC fixture")
+    return out
 
 
-@pytest.mark.slow
-class TestFilterRealMedia:
-    """Validate video filters on real iPhone footage."""
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+class TestFilterSynthMedia:
+    """Validate video filters on synthesized HEVC footage."""
 
     @pytest.mark.parametrize(
         "filter_name,params",
@@ -106,68 +347,73 @@ class TestFilterRealMedia:
             ("vignette", {}),
         ],
     )
-    def test_filter_preserves_resolution(self, real_landscape, tmp_path, filter_name, params):
-        _require_ffmpeg()
+    def test_filter_preserves_resolution(self, synth_landscape_hevc, tmp_path, filter_name, params):
         out = str(tmp_path / f"{filter_name}.mov")
-        result = apply_filter(real_landscape, filter_name, params or None, out)
+        result = apply_filter(synth_landscape_hevc, filter_name, params or None, out)
         assert result.success
         info = probe(result.output_path)
-        orig = probe(real_landscape)
+        orig = probe(synth_landscape_hevc)
         assert info.width == orig.width
         assert info.height == orig.height
 
     @pytest.mark.parametrize("preset", ["warm", "cool", "vintage", "cinematic", "noir"])
-    def test_color_preset_preserves_resolution(self, real_landscape, tmp_path, preset):
-        _require_ffmpeg()
+    def test_color_preset_preserves_resolution(self, synth_landscape_hevc, tmp_path, preset):
         out = str(tmp_path / f"preset_{preset}.mov")
-        result = apply_filter(real_landscape, "color_preset", {"preset": preset}, out)
+        result = apply_filter(synth_landscape_hevc, "color_preset", {"preset": preset}, out)
         assert result.success
         info = probe(result.output_path)
-        orig = probe(real_landscape)
+        orig = probe(synth_landscape_hevc)
+        assert info.width == orig.width
+        assert info.height == orig.height
+
+    @pytest.mark.slow
+    def test_filter_preserves_4k_resolution(self, synth_4k_hevc, tmp_path):
+        """4K HEVC filter — verifies high-resolution path is preserved."""
+        out = str(tmp_path / "4k_grayscale.mov")
+        result = apply_filter(synth_4k_hevc, "grayscale", {}, out)
+        assert result.success
+        info = probe(result.output_path)
+        orig = probe(synth_4k_hevc)
         assert info.width == orig.width
         assert info.height == orig.height
 
 
-@pytest.mark.slow
-class TestNormalizeAudioRealMedia:
-    """Validate audio normalization on real iPhone footage."""
+class TestNormalizeAudioSynthMedia:
+    """Validate audio normalization on synthesized HEVC footage with audio."""
 
-    def test_normalize_audio_preserves_codec(self, real_video_with_audio, tmp_path):
-        _require_ffmpeg()
+    def test_normalize_audio_preserves_codec(self, synth_landscape_hevc_audio, tmp_path):
         out = str(tmp_path / "norm_youtube.mov")
-        result = normalize_audio(real_video_with_audio, target_lufs=-16.0, output_path=out)
+        result = normalize_audio(synth_landscape_hevc_audio, target_lufs=-16.0, output_path=out)
         assert result.success
         info = probe(result.output_path)
         assert info.audio_codec in ("aac", "mp4a")
         assert info.codec in ("h264", "hevc", "libx264")
 
 
-@pytest.mark.slow
-class TestOverlayRealMedia:
-    """Validate picture-in-picture overlay with real files."""
+class TestOverlaySynthMedia:
+    """Validate picture-in-picture overlay with synthesized files."""
 
-    def test_square_on_landscape_pip(self, real_landscape, real_square, tmp_path):
-        _require_ffmpeg()
+    def test_square_on_landscape_pip(self, synth_landscape_hevc, synth_square_hevc, tmp_path):
         out = str(tmp_path / "pip.mov")
         result = overlay_video(
-            real_landscape,
-            real_square,
+            synth_landscape_hevc,
+            synth_square_hevc,
             position="bottom-right",
             width=360,
             output_path=out,
         )
         assert result.success
         info = probe(result.output_path)
-        orig = probe(real_landscape)
+        orig = probe(synth_landscape_hevc)
         assert info.width == orig.width
         assert info.height == orig.height
 
-    def test_png_alpha_overlay(self, real_landscape, real_png, tmp_path):
-        _require_ffmpeg()
+    def test_png_alpha_overlay(self, synth_landscape_hevc, synth_alpha_png, tmp_path):
+        """PNG with alpha channel composited onto HEVC video."""
         out = str(tmp_path / "png_overlay.mov")
         result = overlay_video(
-            real_landscape,
-            real_png,
+            synth_landscape_hevc,
+            synth_alpha_png,
             position="center",
             width=400,
             opacity=0.9,
@@ -175,32 +421,28 @@ class TestOverlayRealMedia:
         )
         assert result.success
         info = probe(result.output_path)
-        orig = probe(real_landscape)
+        orig = probe(synth_landscape_hevc)
         assert info.width == orig.width
         assert info.height == orig.height
 
 
-@pytest.mark.slow
-class TestSplitScreenRealMedia:
-    """Validate split-screen compositing with real files."""
+class TestSplitScreenSynthMedia:
+    """Validate split-screen compositing with synthesized files."""
 
-    def test_portrait_square_side_by_side(self, real_portrait, real_square, tmp_path):
-        _require_ffmpeg()
+    def test_portrait_square_side_by_side(self, synth_portrait_hevc, synth_square_hevc, tmp_path):
         out = str(tmp_path / "sbs.mov")
-        result = split_screen(real_portrait, real_square, layout="side-by-side", output_path=out)
+        result = split_screen(synth_portrait_hevc, synth_square_hevc, layout="side-by-side", output_path=out)
         assert result.success
         info = probe(result.output_path)
         assert info.height > 0
         assert info.width > 0
 
 
-@pytest.mark.slow
-class TestBatchRealMedia:
-    """Validate batch_process with real media files."""
+class TestBatchSynthMedia:
+    """Validate batch_process with synthesized files at multiple resolutions."""
 
-    def test_blur_across_resolutions(self, real_landscape, real_square, real_crop, tmp_path):
-        _require_ffmpeg()
-        files = [real_landscape, real_square, real_crop]
+    def test_blur_across_resolutions(self, synth_landscape_hevc, synth_square_hevc, synth_crop_h264, tmp_path):
+        files = [synth_landscape_hevc, synth_square_hevc, synth_crop_h264]
         result = video_batch(
             inputs=files,
             operation="blur",
@@ -213,32 +455,29 @@ class TestBatchRealMedia:
             assert os.path.isfile(r["output_path"])
 
 
-@pytest.mark.slow
-class TestCrossFeatureRealMedia:
-    """Test composition of multiple features."""
+class TestCrossFeatureSynthMedia:
+    """Test composition of multiple features on synthesized media."""
 
-    def test_filter_then_overlay(self, real_landscape, real_square, tmp_path):
-        _require_ffmpeg()
+    def test_filter_then_overlay(self, synth_landscape_hevc, synth_square_hevc, tmp_path):
         filtered = str(tmp_path / "filtered.mov")
-        r1 = apply_filter(real_landscape, "color_preset", {"preset": "warm"}, filtered)
+        r1 = apply_filter(synth_landscape_hevc, "color_preset", {"preset": "warm"}, filtered)
         assert r1.success
 
         out = str(tmp_path / "filtered_pip.mov")
         r2 = overlay_video(
             r1.output_path,
-            real_square,
+            synth_square_hevc,
             position="bottom-right",
             width=320,
             output_path=out,
         )
         assert r2.success
         info = probe(r2.output_path)
-        assert info.width == probe(real_landscape).width
+        assert info.width == probe(synth_landscape_hevc).width
 
-    def test_filter_chain_then_normalize(self, real_mp4, tmp_path):
-        _require_ffmpeg()
+    def test_filter_chain_then_normalize(self, synth_timeline_mp4, tmp_path):
         step1 = str(tmp_path / "cinematic.mp4")
-        r1 = apply_filter(real_mp4, "color_preset", {"preset": "cinematic"}, step1)
+        r1 = apply_filter(synth_timeline_mp4, "color_preset", {"preset": "cinematic"}, step1)
         assert r1.success
 
         step2 = str(tmp_path / "cinematic_sharp.mp4")
