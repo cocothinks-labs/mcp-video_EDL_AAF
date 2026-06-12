@@ -42,22 +42,6 @@ from .transcribe import (
 
 logger = logging.getLogger(__name__)
 
-_BLOCKED_SYSTEM_PREFIXES = tuple(
-    str(Path(prefix).resolve())
-    for prefix in (
-        "/etc/",
-        "/usr/",
-        "/bin/",
-        "/sbin/",
-        "/var/",
-        "/root/",
-        "/boot/",
-        "/dev/",
-        "/proc/",
-        "/sys/",
-    )
-)
-
 
 def _validate_analysis_output_paths(
     output_srt: str | None,
@@ -65,25 +49,9 @@ def _validate_analysis_output_paths(
     output_md: str | None,
     output_json: str | None,
 ) -> None:
-    import tempfile
-
-    temp_prefix = str(Path(tempfile.gettempdir()).resolve())
-    for label, path in [
-        ("output_srt", output_srt),
-        ("output_txt", output_txt),
-        ("output_md", output_md),
-        ("output_json", output_json),
-    ]:
+    for path in (output_srt, output_txt, output_md, output_json):
         if path is not None:
-            p = Path(path).resolve()
-            if str(p).startswith(temp_prefix):
-                continue
-            if any(str(p).startswith(prefix) for prefix in _BLOCKED_SYSTEM_PREFIXES):
-                raise MCPVideoError(
-                    f"{label} path escapes safe directory: {path}",
-                    error_type="validation_error",
-                    code="unsafe_path",
-                )
+            _validate_output_path(path)
 
 
 def _run_analysis(

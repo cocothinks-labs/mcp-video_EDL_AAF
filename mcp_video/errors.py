@@ -239,15 +239,31 @@ class ResourceError(MCPVideoError):
         )
 
 
-def parse_ffmpeg_error(stderr: str) -> MCPVideoError:
-    """Parse FFmpeg stderr and return the most specific error type."""
+def _input_path_from_command(command: list[str] | None) -> str:
+    """Extract the first -i input path from an FFmpeg command list."""
+    if not command:
+        return ""
+    for i, arg in enumerate(command[:-1]):
+        if arg == "-i":
+            return command[i + 1]
+    return ""
+
+
+def parse_ffmpeg_error(stderr: str, command: list[str] | None = None) -> MCPVideoError:
+    """Parse FFmpeg stderr and return the most specific error type.
+
+    When the failing *command* is provided, file errors carry the actual
+    input path instead of an empty string.
+    """
     stderr = _strip_ffmpeg_banner(stderr)
     stderr_lower = stderr.lower()
+    input_path = _input_path_from_command(command)
+    cmd_str = " ".join(command) if command else ""
 
     if "no such file or directory" in stderr_lower:
-        return InputFileError("", "File not found")
+        return InputFileError(input_path, "File not found")
     if "invalid data found when processing input" in stderr_lower:
-        return InputFileError("", "Not a valid video file")
+        return InputFileError(input_path, "Not a valid video file")
     if "unsupported codec" in stderr_lower or "decoder" in stderr_lower:
         codec = "unknown"
         for line in stderr.split("\n"):
@@ -256,13 +272,13 @@ def parse_ffmpeg_error(stderr: str) -> MCPVideoError:
                 break
         return CodecError(codec)
     if "error while decoding" in stderr_lower:
-        return ProcessingError("", 1, stderr)
+        return ProcessingError(cmd_str, 1, stderr)
     if "permission denied" in stderr_lower:
-        return InputFileError("", "Permission denied")
+        return InputFileError(input_path, "Permission denied")
     if "no space left on device" in stderr_lower:
         return ResourceError("disk_space", "No space left on device")
 
-    return ProcessingError("", 1, stderr)
+    return ProcessingError(cmd_str, 1, stderr)
 
 
 def wrap_error(exc: Exception) -> MCPVideoError:

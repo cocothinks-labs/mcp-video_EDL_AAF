@@ -19,13 +19,21 @@ from .limits import DEFAULT_FFMPEG_TIMEOUT, FFPROBE_TIMEOUT, MAX_FILE_SIZE_MB
 
 _BLOCKED_OUTPUT_PREFIXES = (
     "/bin",
+    "/boot",
+    "/dev",
     "/etc",
     "/private/etc",
+    "/private/var/db",
+    "/private/var/log",
+    "/private/var/root",
+    "/proc",
+    "/root",
     "/sbin",
+    "/sys",
     "/System",
-    "/usr/bin",
-    "/usr/sbin",
+    "/usr",
     "/var/db",
+    "/var/log",
     "/var/root",
 )
 _SENSITIVE_HOME_PARTS = {".aws", ".azure", ".config", ".docker", ".gnupg", ".kube", ".ssh"}
@@ -146,10 +154,21 @@ def _validate_output_path(path: str) -> str:
 
 
 def _run_command(cmd: list[str], timeout: int = DEFAULT_FFMPEG_TIMEOUT) -> subprocess.CompletedProcess[str]:
-    """Run an arbitrary command with timeout and error handling."""
-    # Ensure output directory exists — find the last non-flag argument (the output file)
-    for arg in reversed(cmd):
-        if not arg.startswith("-") and not arg.startswith("ffmpeg") and not arg.startswith("ffprobe"):
+    """Run an arbitrary command with timeout and error handling.
+
+    Bare ``ffmpeg``/``ffprobe`` names are replaced with the resolved runtime
+    binaries so every code path finds FFmpeg the same way.
+    """
+    from .engine_runtime_utils import _ffmpeg, _ffprobe
+
+    if cmd and cmd[0] == "ffmpeg":
+        cmd = [_ffmpeg(), *cmd[1:]]
+    elif cmd and cmd[0] == "ffprobe":
+        cmd = [_ffprobe(), *cmd[1:]]
+    # Ensure output directory exists — find the last non-flag argument (the
+    # output file), never considering cmd[0] (the binary itself).
+    for arg in reversed(cmd[1:]):
+        if not arg.startswith("-"):
             out_dir = os.path.dirname(arg)
             if out_dir:
                 os.makedirs(out_dir, exist_ok=True)
@@ -166,19 +185,21 @@ def _run_command(cmd: list[str], timeout: int = DEFAULT_FFMPEG_TIMEOUT) -> subpr
 
 
 def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run FFmpeg-compatible commands.
+    """Run FFmpeg with raw arguments; the resolved binary and ``-y`` are prepended.
 
-    Accepts either:
-    - raw FFmpeg arguments (e.g. ``["-i", input, ...]``), in which case the
-      runtime FFmpeg binary and ``-y`` are prepended, or
-    - a full ``ffmpeg`` / ``ffprobe`` command, which is executed verbatim for
-      backward compatibility with older call sites.
+    The previous dual-mode signature (raw args OR a full command) silently
+    changed binary resolution and ``-y`` behavior based on the first element.
     """
     from .engine_runtime_utils import _ffmpeg
 
-    cmd = list(args) if args and args[0] in {"ffmpeg", "ffprobe"} else [_ffmpeg(), "-y", *args]
+    if args and args[0] in {"ffmpeg", "ffprobe"}:
+        raise ValueError(
+            "_run_ffmpeg takes raw FFmpeg arguments (the resolved binary and -y are "
+            "prepended); use _run_command for full ffmpeg/ffprobe command lists"
+        )
+    cmd = [_ffmpeg(), "-y", *args]
     try:
-        # cmd is always a list-form ffmpeg/ffprobe invocation; no shell=True
+        # cmd is always a list-form ffmpeg invocation; no shell=True
         proc = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
@@ -188,7 +209,7 @@ def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
     except subprocess.TimeoutExpired as e:
         raise ProcessingError(" ".join(cmd), -1, f"FFmpeg command timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from e
     if proc.returncode != 0:
-        raise parse_ffmpeg_error(proc.stderr)
+        raise parse_ffmpeg_error(proc.stderr, command=cmd)
     return proc
 
 
@@ -273,7 +294,7 @@ def _run_ffmpeg_with_progress(
     if progress_errors:
         raise progress_errors[0]
     if proc.returncode != 0:
-        raise parse_ffmpeg_error(stderr)
+        raise parse_ffmpeg_error(stderr, command=cmd)
 
     # Report 100% on success
     on_progress(100.0)

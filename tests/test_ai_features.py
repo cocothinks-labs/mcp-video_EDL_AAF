@@ -1215,7 +1215,7 @@ def test_ai_stem_separation_demucs_timeout(monkeypatch, sample_video, tmp_path):
 
     def fake_run(cmd, *args, **kwargs):
         calls.append(cmd)
-        if cmd[0] == "ffmpeg":
+        if os.path.basename(cmd[0]) in {"ffmpeg", "ffmpeg.exe"}:
             return subprocess.CompletedProcess(cmd, 0, "", "")
         raise subprocess.TimeoutExpired(cmd, timeout=kwargs.get("timeout"))
 
@@ -1570,13 +1570,13 @@ def test_validate_analysis_output_paths_blocks_system_prefixes():
         )
 
 
-def test_validate_analysis_output_paths_allows_safe_paths():
+def test_validate_analysis_output_paths_allows_safe_paths(tmp_path):
     """_validate_analysis_output_paths allows normal user / tmp paths."""
     from mcp_video.ai_engine import _validate_analysis_output_paths
 
     _validate_analysis_output_paths(
-        output_srt="/tmp/transcript.srt",
-        output_txt="/home/user/out.txt",
+        output_srt=str(tmp_path / "transcript.srt"),
+        output_txt=str(tmp_path / "out.txt"),
         output_md="relative/path.md",
         output_json=None,
     )

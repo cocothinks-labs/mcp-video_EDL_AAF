@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import logging
 import re
-import subprocess
 from pathlib import Path
 
 from ..errors import InputFileError, MCPVideoError, ProcessingError
-from ..ffmpeg_helpers import _validate_input_path, _validate_output_path
+from ..ffmpeg_helpers import _run_command, _validate_input_path, _validate_output_path
 from ..limits import DEFAULT_FFMPEG_TIMEOUT
 
 logger = logging.getLogger(__name__)
@@ -118,12 +117,7 @@ def ai_color_grade(
     # Execute FFmpeg
     _validate_output_path(output)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
-    except subprocess.TimeoutExpired:
-        raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-    if result.returncode != 0:
-        raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+    _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
     return output
 
@@ -145,12 +139,7 @@ def _match_reference_colors(video: str, reference: str) -> dict:
     def extract_mean_color(video_path: str) -> dict:
         """Extract mean RGB values from video using signalstats filter."""
         cmd = ["ffmpeg", "-i", video_path, "-vf", "signalstats", "-f", "null", "-"]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
-        except subprocess.TimeoutExpired:
-            raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-        if result.returncode != 0:
-            raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+        result = _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
         # Default values if extraction fails
         mean_rgb = {"r": 128, "g": 128, "b": 128}
@@ -207,7 +196,7 @@ def _match_reference_colors(video: str, reference: str) -> dict:
             "green": green_adj,
             "blue": blue_adj,
         }
-    except (subprocess.SubprocessError, ProcessingError, ValueError, OSError):
+    except (ProcessingError, ValueError, OSError):
         # Fall back to neutral params if analysis fails
         return {"contrast": 1.0, "saturation": 1.0, "gamma": 1.0, "red": 1.0, "green": 1.0, "blue": 1.0}
 

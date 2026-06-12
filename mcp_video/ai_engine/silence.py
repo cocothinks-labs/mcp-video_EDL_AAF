@@ -10,14 +10,18 @@ from __future__ import annotations
 
 import logging
 import re
-import subprocess
 import tempfile
 from pathlib import Path
 
-from ..errors import InputFileError, MCPVideoError, ProcessingError
-from ..ffmpeg_helpers import _run_ffprobe_json, _validate_input_path, _validate_output_path
+from ..errors import InputFileError, MCPVideoError
+from ..ffmpeg_helpers import (
+    _run_command,
+    _run_ffprobe_json,
+    _sanitize_ffmpeg_number,
+    _validate_input_path,
+    _validate_output_path,
+)
 from ..limits import DEFAULT_FFMPEG_TIMEOUT
-from ..ffmpeg_helpers import _sanitize_ffmpeg_number
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +63,7 @@ def _detect_silence_regions(
         "-",
     ]
 
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
-    except subprocess.TimeoutExpired:
-        raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
+    result = _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
     # Parse silence_start and silence_end from stderr
     silence_regions = []
@@ -164,12 +165,7 @@ def _concat_segments(
             "copy",
             output,
         ]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
-        except subprocess.TimeoutExpired:
-            raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-        if result.returncode != 0:
-            raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+        _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
         return output
 
     # Multiple segments - extract each and concatenate
@@ -180,25 +176,22 @@ def _concat_segments(
             segment_file = Path(tmpdir) / f"segment_{i:04d}.mp4"
             duration = end - start
 
-            cmd = [
-                "ffmpeg",
-                "-y",
-                "-i",
-                video,
-                "-ss",
-                str(start),
-                "-t",
-                str(duration),
-                "-c",
-                "copy",
-                str(segment_file),
-            ]
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
-            except subprocess.TimeoutExpired:
-                raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-            if result.returncode != 0:
-                raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+            _run_command(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    video,
+                    "-ss",
+                    str(start),
+                    "-t",
+                    str(duration),
+                    "-c",
+                    "copy",
+                    str(segment_file),
+                ],
+                timeout=DEFAULT_FFMPEG_TIMEOUT,
+            )
 
             segment_files.append(str(segment_file))
 
@@ -211,25 +204,22 @@ def _concat_segments(
                 f.write(f"file '{escaped}'\n")
 
         # Concatenate using concat demuxer
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_list),
-            "-c",
-            "copy",
-            output,
-        ]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
-        except subprocess.TimeoutExpired:
-            raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-        if result.returncode != 0:
-            raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+        _run_command(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_list),
+                "-c",
+                "copy",
+                output,
+            ],
+            timeout=DEFAULT_FFMPEG_TIMEOUT,
+        )
 
     return output
 
