@@ -176,7 +176,9 @@ def _run_command(cmd: list[str], timeout: int = DEFAULT_FFMPEG_TIMEOUT) -> subpr
     cmd_str = " ".join(cmd)
     try:
         # cmd is always a list built from trusted internal ffmpeg/ffprobe paths; no shell=True
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)  # noqa: S603
+        result = subprocess.run(  # noqa: S603
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout
+        )
     except subprocess.TimeoutExpired:
         raise ProcessingError(cmd_str, -1, f"FFmpeg command timed out after {timeout}s") from None
     if result.returncode != 0:
@@ -204,6 +206,8 @@ def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=DEFAULT_FFMPEG_TIMEOUT,
         )
     except subprocess.TimeoutExpired as e:

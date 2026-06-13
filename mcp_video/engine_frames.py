@@ -28,6 +28,13 @@ def export_frames(
     """
     input_path = _validate_input_path(input_path)
     fps = _sanitize_ffmpeg_number(fps, "fps")
+    if fps <= 0:
+        # Some FFmpeg builds (5.x) silently accept fps=0 and write nothing.
+        raise MCPVideoError(
+            f"fps must be greater than 0, got {fps}",
+            error_type="validation_error",
+            code="invalid_parameter",
+        )
     if format == "mjpeg":
         format = "jpg"
     if format not in ("jpg", "png"):

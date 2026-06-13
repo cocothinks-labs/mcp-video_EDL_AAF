@@ -55,3 +55,20 @@ def test_parse_ffmpeg_error_carries_input_path_from_command():
 def test_parse_ffmpeg_error_works_without_command_context():
     err = parse_ffmpeg_error("x.mp4: No such file or directory")
     assert isinstance(err, InputFileError)
+
+
+def test_run_command_survives_non_utf8_subprocess_output():
+    """Debian's ffmpeg 5.1 vidstab writes raw binary to stderr; strict UTF-8
+    decoding crashed the whole operation with UnicodeDecodeError instead of
+    surfacing a clean ProcessingError."""
+    import sys
+
+    from mcp_video.errors import ProcessingError
+
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys; sys.stderr.buffer.write(b'\\xff\\xfe raw bytes'); sys.exit(1)",
+    ]
+    with pytest.raises(ProcessingError):
+        ffmpeg_helpers._run_command(cmd)

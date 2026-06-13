@@ -50,6 +50,8 @@ def detect_scenes(
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=DEFAULT_FFMPEG_TIMEOUT,
         )
     except subprocess.TimeoutExpired as exc:
