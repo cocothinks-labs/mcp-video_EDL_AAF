@@ -4,11 +4,12 @@ on:
   pull_request:
 jobs:
   test:
-    # Runs on any runner with the shared `docker` label (both CI runners),
-    # restoring dual-runner redundancy. The earlier `docker-egress` pin worked
-    # around a NUCBox network fault (multi-homing + strict rp_filter dropping
-    # container egress), fixed and self-healing as of 2026-06-13.
-    runs-on: docker
+    # Heavy job: ffmpeg + full dependency tree + the ~1464-test suite (~5 min).
+    # Pinned to the `heavy` runner label so it runs ONLY on the 32-core NUCBox
+    # runner and never lands on the capacity-1 VPS runner that co-hosts the
+    # production Forgejo git server. Intensity-based routing (2026-06-13):
+    # nucbox-ci advertises `heavy`, vps-runner-01 advertises `light`.
+    runs-on: heavy
     steps:
       - uses: actions/checkout@v4
       - name: Install system dependencies
