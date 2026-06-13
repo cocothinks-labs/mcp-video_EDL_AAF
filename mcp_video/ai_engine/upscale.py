@@ -113,11 +113,11 @@ def _download_fsrcnn_model(scale: int) -> Path:
         print(f"Downloading FSRCNN x{scale} model...")
         tmp_model = model_path.with_suffix(".tmp")
         max_model_bytes = 500 * (1 << 20)  # 500 MiB limit
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url)  # noqa: S310
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = True
         ssl_context.verify_mode = ssl.CERT_REQUIRED
-        with urllib.request.urlopen(req, timeout=120, context=ssl_context) as resp, open(tmp_model, "wb") as fh:
+        with urllib.request.urlopen(req, timeout=120, context=ssl_context) as resp, open(tmp_model, "wb") as fh:  # noqa: S310
             total = 0
             while True:
                 chunk = resp.read(1 << 20)  # 1 MiB
@@ -375,7 +375,7 @@ def ai_upscale(
         except ImportError:
             raise MCPVideoError(
                 "AI upscaling requires either realesrgan or opencv-contrib-python (cv2). "
-                "Install with: pip install realesrgan or pip install opencv-contrib-python",
+                'Install with: pip install "mcp-video[upscale]" (Python 3.11/3.12)',
                 error_type="dependency_error",
                 code="missing_upscale_dep",
             ) from None

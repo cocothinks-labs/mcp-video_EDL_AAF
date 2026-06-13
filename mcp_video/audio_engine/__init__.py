@@ -108,7 +108,7 @@ def add_generated_audio(
         ]
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
         except subprocess.TimeoutExpired:
             raise ProcessingError(
                 " ".join(cmd), -1, f"Audio processing command timed out after {DEFAULT_FFMPEG_TIMEOUT}s"

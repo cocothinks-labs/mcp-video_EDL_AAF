@@ -2,6 +2,8 @@
 
 import subprocess
 
+import pytest
+
 
 def test_ffprobe_timeout_constant_exists():
     from mcp_video import limits
@@ -90,7 +92,7 @@ def test_run_ffmpeg_prepends_runtime_binary_for_raw_args(monkeypatch):
     def fake_ffmpeg():
         return "/custom/ffmpeg"
 
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, capture_output, text, timeout, **kwargs):
         captured["cmd"] = cmd
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -102,36 +104,19 @@ def test_run_ffmpeg_prepends_runtime_binary_for_raw_args(monkeypatch):
     assert captured["cmd"] == ["/custom/ffmpeg", "-y", "-i", "input.mp4", "output.mp4"]
 
 
-def test_run_ffmpeg_preserves_full_ffprobe_command(monkeypatch):
+def test_run_ffmpeg_rejects_full_ffprobe_command():
+    """The dual-mode signature was removed: full commands belong to _run_command."""
     from mcp_video import ffmpeg_helpers
 
-    captured = {}
-
-    def fake_run(cmd, capture_output, text, timeout):
-        captured["cmd"] = cmd
-        return subprocess.CompletedProcess(cmd, 0, "320x240", "")
-
-    monkeypatch.setattr(ffmpeg_helpers.subprocess, "run", fake_run)
-
-    ffmpeg_helpers._run_ffmpeg(["ffprobe", "-v", "error", "video.mp4"])
-
-    assert captured["cmd"] == ["ffprobe", "-v", "error", "video.mp4"]
+    with pytest.raises(ValueError, match="raw FFmpeg arguments"):
+        ffmpeg_helpers._run_ffmpeg(["ffprobe", "-v", "error", "video.mp4"])
 
 
-def test_run_ffmpeg_preserves_full_ffmpeg_command(monkeypatch):
+def test_run_ffmpeg_rejects_full_ffmpeg_command():
     from mcp_video import ffmpeg_helpers
 
-    captured = {}
-
-    def fake_run(cmd, capture_output, text, timeout):
-        captured["cmd"] = cmd
-        return subprocess.CompletedProcess(cmd, 0, "", "")
-
-    monkeypatch.setattr(ffmpeg_helpers.subprocess, "run", fake_run)
-
-    ffmpeg_helpers._run_ffmpeg(["ffmpeg", "-y", "-i", "input.mp4", "output.mp4"])
-
-    assert captured["cmd"] == ["ffmpeg", "-y", "-i", "input.mp4", "output.mp4"]
+    with pytest.raises(ValueError, match="raw FFmpeg arguments"):
+        ffmpeg_helpers._run_ffmpeg(["ffmpeg", "-y", "-i", "input.mp4", "output.mp4"])
 
 
 def test_validate_output_path_rejects_system_prefixes():

@@ -174,7 +174,7 @@ def _download_direct_url(url: str, dest_dir: str) -> str:
     dest = str(Path(dest_dir) / filename)
 
     headers = {"User-Agent": "mcp-video/1.3.5 (+https://github.com/KyaniteLabs/mcp-video)"}
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(url, headers=headers)  # noqa: S310
     max_download_bytes = 2 * (1 << 30)  # 2 GiB limit
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with opener.open(req, timeout=120) as resp:

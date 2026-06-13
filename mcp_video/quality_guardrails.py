@@ -93,7 +93,7 @@ class VisualQualityGuardrails:
             "json",
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)  # noqa: S603
             if result.returncode != 0:
                 diagnostic = _diagnostic(
                     "ffprobe_signalstats",
@@ -169,7 +169,7 @@ class VisualQualityGuardrails:
             "-",
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)  # noqa: S603
             # Parse stderr for signalstats output
             stderr = result.stderr
             stats = {}
@@ -217,7 +217,7 @@ class VisualQualityGuardrails:
             "-",
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)  # noqa: S603
             # Parse JSON from the output (it's embedded in stderr)
             stderr = result.stderr
 
@@ -278,7 +278,7 @@ class VisualQualityGuardrails:
             "json",
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)  # noqa: S603
             if result.returncode != 0:
                 diagnostic = _diagnostic(
                     "ffprobe_rgb_means",

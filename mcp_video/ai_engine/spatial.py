@@ -11,12 +11,17 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
 from ..errors import InputFileError, MCPVideoError, ProcessingError
-from ..ffmpeg_helpers import _get_video_duration, _run_ffprobe_json, _validate_input_path, _validate_output_path
+from ..ffmpeg_helpers import (
+    _get_video_duration,
+    _run_command,
+    _run_ffprobe_json,
+    _validate_input_path,
+    _validate_output_path,
+)
 from ..limits import DEFAULT_FFMPEG_TIMEOUT
 from ..engine_runtime_utils import _get_audio_stream
 
@@ -46,10 +51,7 @@ def _standard_scene_detect(video: str, threshold: float) -> list[dict]:
             code="invalid_parameter",
         )
     cmd = ["ffmpeg", "-i", video, "-filter:v", f"select='gt(scene,{threshold})',showinfo", "-f", "null", "-"]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
+    result = _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
     scenes = []
     for line in result.stderr.split("\n"):
@@ -246,12 +248,7 @@ def _apply_simple_spatial(
                 str(segment_file),
             ]
 
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
-            except subprocess.TimeoutExpired:
-                raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-            if result.returncode != 0:
-                raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+            _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
         # Concatenate all segments
         if len(segment_files) == 1:
@@ -280,11 +277,6 @@ def _apply_simple_spatial(
                 output,
             ]
 
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
-            except subprocess.TimeoutExpired:
-                raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-            if result.returncode != 0:
-                raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+            _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
     return output

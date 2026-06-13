@@ -205,7 +205,7 @@ v1.2.0 shipped. 82 MCP tools, 832 tests, security hardened. Here's what's next.
 
 ## Observability (For you as the maintainer)
 
-- [ ] **Usage analytics** — Optional anonymous ping on startup: version, Python version, OS. Just a single HTTP call, no tracking. Know how many people actually use it.
+- [~] **Usage analytics** — Dropped 2026-06-12. A v1.3.0 agent commit shipped a ping module pointing at a Vercel endpoint that was never deployed or owned; removed because an unowned, claimable domain receiving install IDs is a liability, not observability. If telemetry ever returns it needs an endpoint we actually control, decided first.
 - [ ] **Structured logging** — Currently silent on success. Add a `--verbose` flag and optional log file. Helps users debug their own issues before filing them.
 - [x] **GitHub Actions CI** — Run the full test suite on push. Catch regressions before they ship. Currently manual. *(Shipped in v0.2.x)*
 

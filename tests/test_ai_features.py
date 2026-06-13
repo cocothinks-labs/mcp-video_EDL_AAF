@@ -511,7 +511,7 @@ def test_ai_scene_detect_caps_ai_frame_extraction_rate(tmp_path, monkeypatch):
 
     seen_cmds = []
 
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, capture_output, text, timeout, **kwargs):
         seen_cmds.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -559,7 +559,7 @@ def test_ai_scene_detect_ai_mode_returns_json_safe_hash_diffs(tmp_path, monkeypa
     monkeypatch.setitem(sys.modules, "PIL.Image", image_module)
     monkeypatch.setattr("mcp_video.ai_engine.scene._run_ffprobe_json", lambda _path: {"format": {"duration": "1"}})
 
-    def fake_run(cmd, capture_output, text, timeout):
+    def fake_run(cmd, capture_output, text, timeout, **kwargs):
         frame_pattern = Path(cmd[-1])
         frame_pattern.parent.mkdir(parents=True, exist_ok=True)
         (frame_pattern.parent / "frame_0001.jpg").write_bytes(b"one")
@@ -688,7 +688,7 @@ class TestColorGrade:
 
         from mcp_video.ai_engine.color import _match_reference_colors
 
-        def fake_run(cmd, capture_output, text, timeout):
+        def fake_run(cmd, capture_output, text, timeout, **kwargs):
             return subprocess.CompletedProcess(cmd, 1, "", "signalstats unavailable")
 
         monkeypatch.setattr(subprocess, "run", fake_run)
@@ -755,7 +755,7 @@ class TestColorGrade:
 
     @requires_ffmpeg
     def test_color_grade_invalid_style(self):
-        """Test that invalid style defaults to auto."""
+        """Unknown styles raise instead of silently grading with `auto`."""
         from mcp_video.ai_engine import ai_color_grade
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -781,9 +781,9 @@ class TestColorGrade:
             ]
             subprocess.run(cmd, capture_output=True, check=True)
 
-            # Invalid style should fall back to auto
-            result = ai_color_grade(input_video, output_video, style="invalid_style")
-            assert os.path.exists(result), "Output should be created even with invalid style"
+            with pytest.raises(MCPVideoError, match="Unknown color grade style"):
+                ai_color_grade(input_video, output_video, style="invalid_style")
+            assert not os.path.exists(output_video), "No output should be written for an invalid style"
 
     def test_color_grade_file_not_found(self):
         """Test that InputFileError is raised for missing input."""
@@ -1215,7 +1215,7 @@ def test_ai_stem_separation_demucs_timeout(monkeypatch, sample_video, tmp_path):
 
     def fake_run(cmd, *args, **kwargs):
         calls.append(cmd)
-        if cmd[0] == "ffmpeg":
+        if os.path.basename(cmd[0]) in {"ffmpeg", "ffmpeg.exe"}:
             return subprocess.CompletedProcess(cmd, 0, "", "")
         raise subprocess.TimeoutExpired(cmd, timeout=kwargs.get("timeout"))
 
@@ -1570,13 +1570,13 @@ def test_validate_analysis_output_paths_blocks_system_prefixes():
         )
 
 
-def test_validate_analysis_output_paths_allows_safe_paths():
+def test_validate_analysis_output_paths_allows_safe_paths(tmp_path):
     """_validate_analysis_output_paths allows normal user / tmp paths."""
     from mcp_video.ai_engine import _validate_analysis_output_paths
 
     _validate_analysis_output_paths(
-        output_srt="/tmp/transcript.srt",
-        output_txt="/home/user/out.txt",
+        output_srt=str(tmp_path / "transcript.srt"),
+        output_txt=str(tmp_path / "out.txt"),
         output_md="relative/path.md",
         output_json=None,
     )

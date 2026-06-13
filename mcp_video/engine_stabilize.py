@@ -82,7 +82,7 @@ def _detect_motion_vectors(input_path: str, vectors_file: str) -> None:
         )
     safe_vectors_file = _escape_ffmpeg_filter_value(vectors_file)
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [
                 _ffmpeg(),
                 "-y",
@@ -96,6 +96,10 @@ def _detect_motion_vectors(input_path: str, vectors_file: str) -> None:
             ],
             capture_output=True,
             text=True,
+            # Some FFmpeg builds (e.g. Debian 5.1 vidstab) emit raw binary on
+            # stderr; strict UTF-8 decoding would crash the whole operation.
+            encoding="utf-8",
+            errors="replace",
             timeout=DEFAULT_FFMPEG_TIMEOUT,
         )
     except subprocess.TimeoutExpired as exc:

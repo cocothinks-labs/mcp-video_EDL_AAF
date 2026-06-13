@@ -42,7 +42,7 @@ def audio_waveform(
     segment_duration = duration / bins
     cmd = [_ffmpeg(), "-i", input_path, "-af", "astats=metadata=1:reset=0,ametadata=1", "-f", "null", "-"]
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,

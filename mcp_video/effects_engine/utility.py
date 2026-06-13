@@ -10,7 +10,7 @@ import subprocess
 from typing import Any
 
 from ..errors import MCPVideoError, ProcessingError
-from ..ffmpeg_helpers import _validate_input_path, _run_command, _run_ffmpeg
+from ..ffmpeg_helpers import _run_command, _run_ffprobe_json, _validate_input_path
 from ..limits import DEFAULT_FFMPEG_TIMEOUT
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ def _extract_representative_colors(video: str, duration: float, max_colors: int 
             "-",
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
+            result = subprocess.run(cmd, capture_output=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
         except subprocess.TimeoutExpired as exc:
             raise ProcessingError(
                 " ".join(cmd), -1, f"FFmpeg command timed out after {DEFAULT_FFMPEG_TIMEOUT}s"
@@ -78,24 +78,10 @@ def video_info_detailed(video: str) -> dict[str, Any]:
         Dict with duration, fps, resolution, bitrate, has_audio,
         scene_changes, dominant_colors
     """
-    import json
-
     video = _validate_input_path(video)
 
-    # Get basic info
-    cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-show_format",
-        "-show_streams",
-        "-print_format",
-        "json",
-        video,
-    ]
-
-    result = _run_ffmpeg(cmd)
-    data = json.loads(result.stdout)
+    # Get basic info through the shared ffprobe helper (resolved binary path)
+    data = _run_ffprobe_json(video)
 
     # Extract video stream info
     video_stream = None
@@ -137,7 +123,7 @@ def video_info_detailed(video: str) -> dict[str, Any]:
             "null",
             "-",
         ]
-        scene_result = subprocess.run(scene_cmd, capture_output=True, text=True, timeout=30)
+        scene_result = subprocess.run(scene_cmd, capture_output=True, text=True, timeout=30)  # noqa: S603
         # Parse scene change timestamps from stderr
         for line in scene_result.stderr.split("\n"):
             if "pts_time:" in line:

@@ -4,22 +4,20 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: docker
+    # docker-egress is served only by runners with verified container egress;
+    # the shared `docker` label includes a runner whose containers currently
+    # cannot reach apt/pip mirrors (NUCBox, diagnosed 2026-06-12).
+    runs-on: docker-egress
     steps:
       - uses: actions/checkout@v4
-      - name: Install Python
-        run: apt-get update -qq && apt-get install -y -qq python3 python3-pip
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: apt-get update -qq && apt-get install -y -qq python3 python3-pip python3-venv ffmpeg
+      - name: Install package
         run: |
-          if [ -f requirements.txt ]; then pip install --break-system-packages -r requirements.txt || true; fi
-          if [ -f pyproject.toml ]; then pip install --break-system-packages -e ".[dev]" 2>/dev/null || true; fi
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet --upgrade pip
+          .venv/bin/pip install --quiet -e ".[dev]"
       - name: Lint
-        run: |
-          pip install --break-system-packages ruff 2>/dev/null
-          ruff check . || true
+        run: .venv/bin/ruff check .
       - name: Test
-        run: |
-          if [ -f pytest.ini ] || [ -f setup.cfg ] || [ -d tests ]; then
-            pip install --break-system-packages pytest 2>/dev/null
-            pytest || true
-          fi
+        run: .venv/bin/pytest tests/ -q -m "not slow"

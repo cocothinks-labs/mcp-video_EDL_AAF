@@ -46,10 +46,12 @@ def detect_scenes(
         "-",
     ]
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=DEFAULT_FFMPEG_TIMEOUT,
         )
     except subprocess.TimeoutExpired as exc:

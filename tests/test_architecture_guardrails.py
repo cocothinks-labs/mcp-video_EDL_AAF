@@ -153,6 +153,8 @@ def test_shared_ffmpeg_helpers_remain_canonical_for_core_utilities() -> None:
     definitions = {name: set() for name in allowed_definitions}
 
     for path in sorted(PACKAGE.glob("*.py")):
+        if path.name.startswith("._"):
+            continue  # macOS AppleDouble artifacts in tar/Finder-copied trees
         tree = parse_module(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name in definitions:

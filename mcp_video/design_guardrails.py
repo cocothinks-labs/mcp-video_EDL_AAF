@@ -278,7 +278,7 @@ def validate_text_layout(
                         overlay_indices=(i,),
                     )
                 )
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     # 3. Check text size
@@ -372,7 +372,7 @@ def validate_text_layout(
                             overlay_indices=(i,),
                         )
                     )
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
     return warnings
@@ -507,7 +507,7 @@ def extract_verification_frame(
     ]
 
     try:
-        subprocess.run(
+        subprocess.run(  # noqa: S603
             cmd,
             capture_output=True,
             text=True,

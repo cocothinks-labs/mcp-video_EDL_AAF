@@ -10,14 +10,25 @@ from __future__ import annotations
 
 import logging
 import re
-import subprocess
 from pathlib import Path
 
-from ..errors import InputFileError, ProcessingError
-from ..ffmpeg_helpers import _validate_input_path, _validate_output_path
+from ..errors import InputFileError, MCPVideoError, ProcessingError
+from ..ffmpeg_helpers import _run_command, _validate_input_path, _validate_output_path
 from ..limits import DEFAULT_FFMPEG_TIMEOUT
 
 logger = logging.getLogger(__name__)
+
+# Style presets define color adjustments. Every style accepted by
+# validation.VALID_COLOR_GRADE_STYLES must have an entry here.
+STYLE_PRESETS: dict[str, dict[str, float]] = {
+    "cinematic": {"contrast": 1.1, "saturation": 0.9, "gamma": 1.0, "red": 1.05, "green": 1.0, "blue": 0.95},
+    "vintage": {"contrast": 0.9, "saturation": 0.7, "gamma": 1.1, "red": 1.1, "green": 0.95, "blue": 0.8},
+    "warm": {"contrast": 1.0, "saturation": 1.05, "gamma": 1.0, "red": 1.1, "green": 1.0, "blue": 0.9},
+    "cool": {"contrast": 1.0, "saturation": 0.95, "gamma": 1.0, "red": 0.9, "green": 1.0, "blue": 1.1},
+    "dramatic": {"contrast": 1.3, "saturation": 1.1, "gamma": 0.9, "red": 1.0, "green": 1.0, "blue": 1.0},
+    "noir": {"contrast": 1.3, "saturation": 0.2, "gamma": 0.95, "red": 1.0, "green": 1.0, "blue": 1.0},
+    "auto": {"contrast": 1.05, "saturation": 1.0, "gamma": 1.0, "red": 1.0, "green": 1.0, "blue": 1.0},
+}
 
 
 def ai_color_grade(
@@ -25,14 +36,17 @@ def ai_color_grade(
     output: str,
     reference: str | None = None,
     style: str = "auto",
+    lut_path: str | None = None,
 ) -> str:
-    """Auto color grading based on reference or style preset.
+    """Color grading via a LUT file, a reference video, or a style preset.
 
     Args:
         video: Input video path
         output: Output video path
         reference: Optional reference video for color matching
-        style: Style preset (auto, cinematic, vintage, warm, cool, dramatic)
+        style: Style preset (auto, cinematic, vintage, warm, cool, dramatic, noir)
+        lut_path: Optional .cube/.3dl LUT file — applied with FFmpeg lut3d and
+            overrides both reference and style
 
     Returns:
         Path to output video
@@ -48,18 +62,25 @@ def ai_color_grade(
     if not video_path.exists():
         raise InputFileError(video)
 
-    # Style presets define color adjustments
-    style_presets = {
-        "cinematic": {"contrast": 1.1, "saturation": 0.9, "gamma": 1.0, "red": 1.05, "green": 1.0, "blue": 0.95},
-        "vintage": {"contrast": 0.9, "saturation": 0.7, "gamma": 1.1, "red": 1.1, "green": 0.95, "blue": 0.8},
-        "warm": {"contrast": 1.0, "saturation": 1.05, "gamma": 1.0, "red": 1.1, "green": 1.0, "blue": 0.9},
-        "cool": {"contrast": 1.0, "saturation": 0.95, "gamma": 1.0, "red": 0.9, "green": 1.0, "blue": 1.1},
-        "dramatic": {"contrast": 1.3, "saturation": 1.1, "gamma": 0.9, "red": 1.0, "green": 1.0, "blue": 1.0},
-        "auto": {"contrast": 1.05, "saturation": 1.0, "gamma": 1.0, "red": 1.0, "green": 1.0, "blue": 1.0},
-    }
+    if lut_path is not None:
+        suffix = Path(lut_path).suffix.lower()
+        if suffix not in {".cube", ".3dl"}:
+            raise MCPVideoError(
+                f"LUT file must be a .cube or .3dl file, got '{suffix or lut_path}'",
+                error_type="validation_error",
+                code="invalid_lut",
+            )
+        lut_path = _validate_input_path(lut_path)
+        return _apply_lut(str(video_path), output, lut_path)
 
-    # Get style parameters (default to auto if invalid style provided)
-    params = style_presets.get(style, style_presets["auto"])
+    try:
+        params = STYLE_PRESETS[style]
+    except KeyError:
+        raise MCPVideoError(
+            f"Unknown color grade style '{style}'. Valid styles: {', '.join(sorted(STYLE_PRESETS))}",
+            error_type="validation_error",
+            code="invalid_style",
+        ) from None
 
     # If reference provided, analyze and adjust to match
     if reference:
@@ -110,13 +131,32 @@ def ai_color_grade(
     # Execute FFmpeg
     _validate_output_path(output)
     Path(output).parent.mkdir(parents=True, exist_ok=True)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-    if result.returncode != 0:
-        raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+    _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
+    return output
+
+
+def _apply_lut(video: str, output: str, lut_path: str) -> str:
+    """Apply a .cube/.3dl LUT with FFmpeg's lut3d filter."""
+    from ..ffmpeg_helpers import _escape_ffmpeg_filter_value
+
+    filter_string = f"lut3d={_escape_ffmpeg_filter_value(lut_path)}"
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        video,
+        "-vf",
+        filter_string,
+        "-c:a",
+        "copy",
+        "-pix_fmt",
+        "yuv420p",
+        output,
+    ]
+    _validate_output_path(output)
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
     return output
 
 
@@ -137,12 +177,7 @@ def _match_reference_colors(video: str, reference: str) -> dict:
     def extract_mean_color(video_path: str) -> dict:
         """Extract mean RGB values from video using signalstats filter."""
         cmd = ["ffmpeg", "-i", video_path, "-vf", "signalstats", "-f", "null", "-"]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-        if result.returncode != 0:
-            raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+        result = _run_command(cmd, timeout=DEFAULT_FFMPEG_TIMEOUT)
 
         # Default values if extraction fails
         mean_rgb = {"r": 128, "g": 128, "b": 128}
@@ -199,7 +234,7 @@ def _match_reference_colors(video: str, reference: str) -> dict:
             "green": green_adj,
             "blue": blue_adj,
         }
-    except (subprocess.SubprocessError, ProcessingError, ValueError, OSError):
+    except (ProcessingError, ValueError, OSError):
         # Fall back to neutral params if analysis fails
         return {"contrast": 1.0, "saturation": 1.0, "gamma": 1.0, "red": 1.0, "green": 1.0, "blue": 1.0}
 

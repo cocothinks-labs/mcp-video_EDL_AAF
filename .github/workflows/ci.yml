@@ -75,6 +75,10 @@ jobs:
         run: .venv/bin/ruff check mcp_video/ tests/
       - name: Ruff format check
         run: .venv/bin/ruff format --check mcp_video/ tests/
+      - name: Type check core modules
+        run: |
+          .venv/bin/pip install -e . pyright
+          .venv/bin/pyright
 
   package-surface:
     name: Package surface
@@ -124,9 +128,9 @@ jobs:
       - name: Install dependencies
         if: needs.changes.outputs.code == 'true'
         run: .venv/bin/pip install -e ".[dev]"
-      - name: Run tests
+      - name: Run tests with coverage
         if: needs.changes.outputs.code == 'true'
-        run: .venv/bin/pytest tests/ -q -m "not slow" --tb=short
+        run: .venv/bin/pytest tests/ -q -m "not slow" --tb=short --cov=mcp_video --cov-report=term
 
   compatibility:
     name: Compatibility (Python ${{ matrix.python-version }})
@@ -135,7 +139,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - name: Skip compatibility tests
         if: needs.changes.outputs.code != 'true'
@@ -164,6 +168,117 @@ jobs:
       - name: Run tests
         if: needs.changes.outputs.code == 'true'
         run: .venv/bin/pytest tests/ -q -m "not slow" --tb=short
+
+  minimal-install:
+    name: Minimal install (no extras)
+    needs: changes
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Skip minimal install check
+        if: needs.changes.outputs.code != 'true'
+        run: echo "Code inputs unchanged; marking minimal install check successful."
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        if: needs.changes.outputs.code == 'true'
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: needs.changes.outputs.code == 'true'
+        with:
+          python-version: '3.13'
+      - name: Create venv
+        if: needs.changes.outputs.code == 'true'
+        run: python -m venv .venv
+      - name: Ensure FFmpeg
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          if ! command -v ffmpeg &>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+      - name: Install package without extras
+        if: needs.changes.outputs.code == 'true'
+        run: .venv/bin/pip install -e . pytest pytest-asyncio
+      - name: Bare install must import and pass doctor
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          .venv/bin/python -c "import mcp_video, mcp_video.server"
+          .venv/bin/mcp-video doctor
+      - name: Run extras-free test subset
+        if: needs.changes.outputs.code == 'true'
+        run: .venv/bin/pytest tests/test_public_surface.py tests/test_doctor.py tests/test_models.py tests/test_errors.py -q --tb=short
+
+  slow-suite:
+    name: Slow suite (real-media)
+    needs: changes
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Skip slow suite
+        if: needs.changes.outputs.code != 'true'
+        run: echo "Code inputs unchanged; marking slow suite successful."
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        if: needs.changes.outputs.code == 'true'
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: needs.changes.outputs.code == 'true'
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
+      - name: Create venv
+        if: needs.changes.outputs.code == 'true'
+        run: python -m venv .venv
+      - name: Ensure FFmpeg
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          if ! command -v ffmpeg &>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+      - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
+        run: .venv/bin/pip install -e ".[dev]"
+      - name: Run slow tests
+        if: needs.changes.outputs.code == 'true'
+        run: .venv/bin/pytest tests/ -q -m "slow" --tb=short
+
+  hyperframes-integration:
+    name: Hyperframes integration (informational)
+    needs: changes
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Informational until runner compatibility is proven: failures are logged
+    # in the run, not blocking. Promote to a hard gate once stable.
+    continue-on-error: true
+    steps:
+      - name: Skip hyperframes integration
+        if: needs.changes.outputs.code != 'true'
+        run: echo "Code inputs unchanged; marking hyperframes integration successful."
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        if: needs.changes.outputs.code == 'true'
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        if: needs.changes.outputs.code == 'true'
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: 'pyproject.toml'
+      - name: Create venv
+        if: needs.changes.outputs.code == 'true'
+        run: python -m venv .venv
+      - name: Ensure FFmpeg
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          if ! command -v ffmpeg &>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+      - name: Install Hyperframes CLI
+        if: needs.changes.outputs.code == 'true'
+        run: |
+          node --version
+          npm install -g hyperframes
+          hyperframes --version
+      - name: Install dependencies
+        if: needs.changes.outputs.code == 'true'
+        run: .venv/bin/pip install -e ".[dev]"
+      - name: Run hyperframes-marked tests
+        if: needs.changes.outputs.code == 'true'
+        run: .venv/bin/pytest tests/ -q -m "hyperframes" --tb=short
 
   docker:
     name: Docker build

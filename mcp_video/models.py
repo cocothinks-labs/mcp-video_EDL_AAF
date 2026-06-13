@@ -79,6 +79,8 @@ class VideoInfo(BaseModel):
         from math import gcd
 
         g = gcd(self.display_width, self.display_height)
+        if g == 0:
+            return "unknown"
         return f"{self.display_width // g}:{self.display_height // g}"
 
     @property

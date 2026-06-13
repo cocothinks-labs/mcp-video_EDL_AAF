@@ -53,7 +53,7 @@ VALID_HYPERFRAMES_RESOLUTIONS = {"landscape", "portrait", "landscape-4k", "portr
 VALID_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large", "turbo"}
 VALID_DEMUCS_MODELS = {"htdemucs", "htdemucs_ft", "mdx", "mdx_extra", "mdx_extra_q"}
 VALID_UPSCALE_MODELS = {"realesrgan", "bsrgan"}
-VALID_COLOR_GRADE_STYLES = {"auto", "warm", "cool", "vintage", "cinematic", "noir"}
+VALID_COLOR_GRADE_STYLES = {"auto", "warm", "cool", "vintage", "cinematic", "noir", "dramatic"}
 VALID_AUDIO_SEQUENCE_TYPES = {"tone", "preset", "whoosh"}
 FILTER_PARAMETER_BOUNDS: dict[str, dict[str, tuple[float, float]]] = {
     "blur": {"radius": (0.0, 50.0), "strength": (0.0, 5.0)},

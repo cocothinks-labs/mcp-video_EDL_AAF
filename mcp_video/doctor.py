@@ -148,7 +148,7 @@ def _parse_ffmpeg_version(version_line: str | None) -> int | None:
 
 def _command_version(command: list[str]) -> str | None:
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=DOCTOR_COMMAND_TIMEOUT)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=DOCTOR_COMMAND_TIMEOUT)  # noqa: S603
     except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode != 0:
@@ -186,19 +186,13 @@ def _check_command(definition: dict[str, Any], which: WhichFn, version_runner: V
                     f"FFmpeg {major}.x works but {MIN_FFMPEG_VERSION}+ is recommended for full feature support."
                 )
 
-    # Hyperframes version check
+    # Hyperframes version check — routed through the injectable version_runner
+    # so tests can exercise both outcomes (a raw subprocess call here would be
+    # untestable, the same defect class as the @hyperframes/core probe).
     if definition["name"] == "node" and ok:
-        try:
-            hf_result = subprocess.run(
-                ["npx", "--yes", "hyperframes", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=DOCTOR_COMMAND_TIMEOUT,
-            )
-            if hf_result.returncode == 0:
-                extra["hyperframes_version"] = hf_result.stdout.strip().splitlines()[0]
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        hf_version = version_runner(["npx", "--yes", "hyperframes", "--version"])
+        if hf_version:
+            extra["hyperframes_version"] = hf_version
 
     return {
         "name": definition["name"],
@@ -310,20 +304,6 @@ def _check_audio_engine() -> dict[str, Any]:
     }
 
 
-def _check_minimax() -> dict[str, Any]:
-    """Check MiniMax API key availability."""
-    has_key = bool(os.environ.get("MINIMAX_API_KEY"))
-    return {
-        "name": "minimax_api",
-        "category": "music_generation",
-        "required": False,
-        "ok": has_key,
-        "path": None,
-        "version": None,
-        "install_hint": None if has_key else "Set MINIMAX_API_KEY environment variable for AI music generation.",
-    }
-
-
 def _check_mcp_video(find_spec: FindSpecFn, package_version: PackageVersionFn) -> dict[str, Any]:
     spec = find_spec("mcp_video")
     path = getattr(spec, "origin", None) if spec is not None else None
@@ -362,12 +342,24 @@ def _check_hyperframes_cli(which: WhichFn, version_runner: VersionRunner) -> dic
     }
 
 
+# Probe for @hyperframes/core in the active Node package layout. The package is
+# ESM-only with a restrictive "exports" map (no "./package.json" subpath and no
+# "require" condition), so require()/require.resolve() throw
+# ERR_PACKAGE_PATH_NOT_EXPORTED. Walk the node_modules resolution chain and read
+# its package.json from disk instead.
+HYPERFRAMES_CORE_PROBE = (
+    "const fs=require('fs');const path=require('path');"
+    "const dirs=require.resolve.paths('@hyperframes/core')||[];"
+    "for(const dir of dirs){"
+    "const file=path.join(dir,'@hyperframes/core','package.json');"
+    "if(fs.existsSync(file)){"
+    "console.log(JSON.parse(fs.readFileSync(file,'utf8')).version);process.exit(0);}}"
+    "process.exit(1);"
+)
+
+
 def _check_hyperframes_core(which: WhichFn, version_runner: VersionRunner) -> dict[str, Any]:
-    command = [
-        "node",
-        "-e",
-        "try { console.log(require('@hyperframes/core/package.json').version) } catch (err) { process.exit(1) }",
-    ]
+    command = ["node", "-e", HYPERFRAMES_CORE_PROBE]
     path = which("node")
     version = version_runner(command) if path else None
     ok = path is not None and version is not None
@@ -420,7 +412,6 @@ def run_diagnostics(
     )
     checks.append(_check_crush())
     checks.append(_check_audio_engine())
-    checks.append(_check_minimax())
     return {
         "success": True,
         "platform": {

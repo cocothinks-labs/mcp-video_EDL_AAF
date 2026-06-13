@@ -185,7 +185,7 @@ def _run_hyperframes(
     """Run a Hyperframes command and return the CompletedProcess."""
     cmd = [*_hyperframes_command_prefix(cwd=cwd), *args]
     try:
-        return subprocess.run(
+        return subprocess.run(  # noqa: S603
             cmd,
             cwd=str(cwd),
             capture_output=True,
@@ -880,7 +880,7 @@ def preview(
     _require_hyperframes_deps(cwd=project)
 
     cmd = [*_hyperframes_command_prefix(cwd=project), "preview", str(project), "--port", str(port)]
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603
         cmd,
         cwd=str(project),
         stdout=subprocess.DEVNULL,
@@ -910,7 +910,7 @@ def still(
 ) -> HyperframesStillResult:
     """Render a single frame from a Hyperframes composition.
 
-    Hyperframes 0.5 writes snapshot PNGs into the project ``snapshots/``
+    Hyperframes writes snapshot PNGs into the project ``snapshots/``
     directory and does not accept an output file flag. Return the actual
     generated frame path instead of echoing a requested-but-unwritten path.
     """

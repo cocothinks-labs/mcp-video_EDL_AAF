@@ -38,7 +38,7 @@
 
 ## Public Discovery
 
-**mcp-video** is a free, open-source **Model Context Protocol (MCP) server**, Python library, and CLI that gives AI agents a real video-editing surface. It wraps FFmpeg, PUSHING CREATION-style planning, media analysis, quality checks, subtitles, audio generation, effects, Hyperframes 0.5 rendering, local repurposing packages, and guardrails for risky edit parameters behind structured tool schemas.
+**mcp-video** is a free, open-source **Model Context Protocol (MCP) server**, Python library, and CLI that gives AI agents a real video-editing surface. It wraps FFmpeg, PUSHING CREATION-style planning, media analysis, quality checks, subtitles, audio generation, effects, Hyperframes rendering, local repurposing packages, and guardrails for risky edit parameters behind structured tool schemas.
 
 Best-fit searches:
 
@@ -96,6 +96,47 @@ mcp-video doctor
 ```
 
 Hyperframes tools additionally need Node.js 22+ and a resolvable Hyperframes CLI. Install/pin Hyperframes in the active Node package layout, add `hyperframes` to `PATH`, or set `MCP_VIDEO_HYPERFRAMES_COMMAND`.
+
+### Which extra do I need?
+
+The core install covers all FFmpeg editing tools. Optional features ship as extras — install only what you use:
+
+| You want | Install | Approx. extra size |
+|---|---|---|
+| Speech-to-text subtitles (Whisper) | `pip install "mcp-video[transcribe]"` | ~1 GB (torch) |
+| Image analysis (colors, layout, contrast) | `pip install "mcp-video[image]"` | ~50 MB |
+| Vocal/instrument stem separation | `pip install "mcp-video[stems]"` | ~2 GB (torch + demucs) |
+| AI upscaling | `pip install "mcp-video[upscale]"` | ~2 GB (Python ≤3.12) |
+| Procedural audio/music tools | `pip install "mcp-video[audio]"` | ~30 MB (numpy) |
+| Everything AI | `pip install "mcp-video[ai]"` | several GB |
+
+Mix freely, e.g. `pip install "mcp-video[transcribe,image]"`. Run `mcp-video doctor` afterward — it reports exactly which features are available and what is missing.
+
+## En español
+
+mcp-video es un servidor MCP de edición de video para agentes de IA: 119 herramientas estructuradas sobre FFmpeg para recortar, unir, subtitular, mezclar audio, aplicar efectos y reutilizar contenido (Shorts, Reels, TikTok), con barreras de seguridad que detectan parámetros riesgosos antes de renderizar.
+
+Requisito: [FFmpeg](https://ffmpeg.org/) instalado y disponible en el `PATH`.
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# Instalación y diagnóstico
+pip install mcp-video
+mcp-video doctor
+```
+
+Para Claude Code:
+
+```bash
+claude mcp add mcp-video -- uvx --from mcp-video mcp-video
+```
+
+`mcp-video doctor` informa qué funciones están disponibles y qué falta instalar. La documentación completa está en inglés; los mensajes de error principales son bilingües.
 
 ## Quick Start
 

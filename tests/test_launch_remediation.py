@@ -12,28 +12,6 @@ from pathlib import Path
 import pytest
 
 
-def test_analytics_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("MCP_VIDEO_ANALYTICS", raising=False)
-
-    import importlib
-    import mcp_video.analytics as analytics
-
-    analytics = importlib.reload(analytics)
-
-    assert analytics.analytics_enabled() is False
-
-
-def test_analytics_enabled_only_by_explicit_opt_in(monkeypatch):
-    monkeypatch.setenv("MCP_VIDEO_ANALYTICS", "1")
-
-    import importlib
-    import mcp_video.analytics as analytics
-
-    analytics = importlib.reload(analytics)
-
-    assert analytics.analytics_enabled() is True
-
-
 def test_mograph_frame_count_is_capped(monkeypatch):
     from mcp_video.server_tools_effects import video_mograph_count
 

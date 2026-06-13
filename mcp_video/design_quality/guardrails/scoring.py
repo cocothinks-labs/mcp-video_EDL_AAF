@@ -219,7 +219,7 @@ class ScoringMixin:
             frame_path = tmp_file.name
         try:
             cmd = ["ffmpeg", "-y", "-i", video_path, "-ss", str(time_sec), "-vframes", "1", frame_path]
-            subprocess.run(cmd, capture_output=True, timeout=30)
+            subprocess.run(cmd, capture_output=True, timeout=30)  # noqa: S603
 
             if not os.path.exists(frame_path):
                 return []
@@ -227,7 +227,7 @@ class ScoringMixin:
             # Analyze frame for text regions using ffmpeg's signature filter
             # This gives us an estimate of complexity which correlates with text amount
             cmd = ["ffmpeg", "-y", "-i", frame_path, "-vf", "signature=format=xml", "-f", "null", "-"]
-            subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
+            subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
 
             # Text detection is not yet implemented (would require OCR).
             # Return empty list rather than fabricated data.

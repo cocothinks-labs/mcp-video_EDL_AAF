@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import math
 
+from .engine_runtime_utils import _build_edit_result, _timed_operation
 from .ffmpeg_helpers import (
     _run_command,
     _sanitize_ffmpeg_number,
     _validate_input_path,
     _validate_output_path,
 )
+from .models import EditResult
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +51,7 @@ def glitch_rgb_shift(
     amount: float = 10.0,
     angle: float = 0.0,
     noise: float = 0.0,
-) -> str:
+) -> EditResult:
     """Apply RGB channel shift with optional per-frame noise.
 
     Args:
@@ -60,7 +62,7 @@ def glitch_rgb_shift(
         noise: Per-frame noise amplitude (0-1). Default 0.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -92,8 +94,9 @@ def glitch_rgb_shift(
         vf = f"rgbashift=rh={rh:.2f}:rv={rv:.2f}:bh={bh:.2f}:bv={bv:.2f}"
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_rgb_shift", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +111,7 @@ def glitch_scanline_jitter(
     frequency: float = 0.3,
     speed: float = 5.0,
     row_height: int = 4,
-) -> str:
+) -> EditResult:
     """Apply horizontal jitter to random scanlines.
 
     Args:
@@ -120,7 +123,7 @@ def glitch_scanline_jitter(
         row_height: Height of each jitter band in pixels. Default 4.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -148,8 +151,9 @@ def glitch_scanline_jitter(
     )
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_scanline_jitter", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +167,7 @@ def glitch_screen_tearing(
     tear_count: int = 5,
     offset_range: float = 80.0,
     speed: float = 3.0,
-) -> str:
+) -> EditResult:
     """Apply horizontal screen tearing at random Y positions.
 
     Args:
@@ -174,7 +178,7 @@ def glitch_screen_tearing(
         speed: Animation speed. Default 3.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -203,8 +207,9 @@ def glitch_screen_tearing(
     vf = f"geq=r='p(X+({displacement}),Y)':g='p(X+({displacement}),Y)':b='p(X+({displacement}),Y)'"
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_screen_tearing", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +224,7 @@ def glitch_vhs_tracking(
     noise_amount: float = 0.03,
     color_bleed: float = 3.0,
     roll_speed: float = 2.0,
-) -> str:
+) -> EditResult:
     """Simulate VHS tracking error with color bleed and rolling bands.
 
     Args:
@@ -231,7 +236,7 @@ def glitch_vhs_tracking(
         roll_speed: Vertical roll speed. Default 2.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -263,8 +268,9 @@ def glitch_vhs_tracking(
     )
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_vhs_tracking", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +284,7 @@ def glitch_macroblocking(
     block_size: int = 16,
     intensity: float = 0.7,
     color_reduction: float = 0.3,
-) -> str:
+) -> EditResult:
     """Simulate codec macroblocking artifacts by downscale/upscale + posterize.
 
     Args:
@@ -289,7 +295,7 @@ def glitch_macroblocking(
         color_reduction: Color level reduction (0-1). Default 0.3.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -316,8 +322,9 @@ def glitch_macroblocking(
     )
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_macroblocking", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +337,7 @@ def glitch_datamoshing(
     output: str,
     drift: float = 20.0,
     iframe_interval: int = 30,
-) -> str:
+) -> EditResult:
     """Simulate datamoshing / P-frame corruption artifacts.
 
     Uses frame blending with cyclic displacement resets to mimic
@@ -343,7 +350,7 @@ def glitch_datamoshing(
         iframe_interval: Frame interval for displacement resets. Default 30.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -366,8 +373,9 @@ def glitch_datamoshing(
     )
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_datamoshing", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +389,7 @@ def glitch_cmyk_split(
     amount: float = 8.0,
     angle: float = 0.0,
     noise: float = 0.0,
-) -> str:
+) -> EditResult:
     """Apply CMYK-style four-channel split at 90-degree offsets.
 
     Simulates a four-plate offset print registration error by shifting
@@ -396,7 +404,7 @@ def glitch_cmyk_split(
         noise: Per-frame noise amplitude (0-1). Default 0.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -441,8 +449,9 @@ def glitch_cmyk_split(
     vf = f"{rgbashift},colorbalance=rs=0.05:bs=-0.03:gh=0.03"
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_cmyk_split", timing)
 
 
 # ---------------------------------------------------------------------------
@@ -457,7 +466,7 @@ def glitch_turbulent_displacement(
     scale: float = 0.01,
     speed: float = 1.0,
     octaves: int = 3,
-) -> str:
+) -> EditResult:
     """Apply turbulent displacement using multi-octave sin/cos approximation.
 
     Uses layered sin/cos expressions at different frequencies to approximate
@@ -472,7 +481,7 @@ def glitch_turbulent_displacement(
         octaves: Number of noise octaves (1-5). Default 3.
 
     Returns:
-        Path to output video.
+        EditResult with output path, duration, resolution, size, and elapsed_ms.
     """
     input_path = _validate_input_path(input_path)
     _validate_output_path(output)
@@ -504,5 +513,6 @@ def glitch_turbulent_displacement(
     )
 
     cmd = _build_cmd(input_path, output, vf)
-    _run_command(cmd)
-    return output
+    with _timed_operation() as timing:
+        _run_command(cmd)
+    return _build_edit_result(output, "glitch_turbulent_displacement", timing)

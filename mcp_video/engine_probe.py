@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 import threading
+from typing import Any
 
 from .errors import InputFileError, MCPVideoError, ProcessingError
 from .ffmpeg_helpers import _run_ffprobe_json, _validate_input_path
@@ -26,7 +27,7 @@ def _cache_key(path: str) -> tuple[str, float, int]:
     return (path, stat.st_mtime, stat.st_size)
 
 
-def _parse_probe_duration(value: object) -> float | None:
+def _parse_probe_duration(value: Any) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -67,6 +68,10 @@ def _build_video_info(path: str, data: dict) -> VideoInfo:
         else:
             fps = float(rfr) if float(rfr) != 0 else 30.0
     except (ValueError, ZeroDivisionError):
+        fps = 30.0
+    if fps <= 0:
+        # ffprobe reports r_frame_rate as "0/1" for some attached-pic and
+        # audio-derived video streams; 0 fps poisons all downstream frame math.
         fps = 30.0
 
     # Codecs

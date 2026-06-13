@@ -12,6 +12,11 @@ from .errors import MCPVideoError
 from .models import ASPECT_RATIOS, QUALITY_PRESETS, EditResult, QualityLevel
 
 
+def _even_dimension(value: float) -> int:
+    """Round to the nearest even integer — yuv420p/libx264 reject odd dimensions."""
+    return max(2, round(value / 2) * 2)
+
+
 def resize(
     input_path: str,
     width: int | None = None,
@@ -43,10 +48,10 @@ def resize(
         w, h = width, height
     elif width:
         ratio = info.height / info.width
-        w, h = width, int(width * ratio)
+        w, h = _even_dimension(width), _even_dimension(width * ratio)
     elif height:
         ratio = info.width / info.height
-        w, h = int(height * ratio), height
+        w, h = _even_dimension(height * ratio), _even_dimension(height)
     else:
         raise MCPVideoError("resize requires width+height, aspect_ratio, or single dimension")
 

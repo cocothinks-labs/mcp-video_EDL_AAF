@@ -9,13 +9,12 @@ Optional dependencies:
 from __future__ import annotations
 
 import logging
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..errors import InputFileError, MCPVideoError, ProcessingError
-from ..ffmpeg_helpers import _get_video_duration, _seconds_to_srt_time, _validate_output_path
+from ..errors import InputFileError, MCPVideoError
+from ..ffmpeg_helpers import _get_video_duration, _run_command, _seconds_to_srt_time, _validate_output_path
 from ..limits import DEFAULT_FFMPEG_TIMEOUT, MAX_AI_TRANSCRIBE_DURATION
 from ..validation import VALID_WHISPER_MODELS
 
@@ -71,12 +70,12 @@ def ai_transcribe(
         import whisper
     except ImportError:
         raise MCPVideoError(
-            "Whisper not installed. Install with: pip install openai-whisper",
+            'Whisper not installed. Install with: pip install "mcp-video[transcribe]"',
             error_type="dependency_error",
             code="missing_whisper",
             suggested_action={
                 "auto_fix": False,
-                "description": "Install openai-whisper to enable transcription",
+                "description": 'Run: pip install "mcp-video[transcribe]" to enable transcription',
             },
         ) from None
 
@@ -92,26 +91,23 @@ def ai_transcribe(
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             audio_path = tmp.name
 
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            str(video_path),
-            "-vn",  # No video
-            "-acodec",
-            "pcm_s16le",  # 16-bit PCM
-            "-ar",
-            "16000",  # 16kHz (Whisper expects this)
-            "-ac",
-            "1",  # Mono
-            audio_path,
-        ]
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            raise ProcessingError(f"Operation timed out after {DEFAULT_FFMPEG_TIMEOUT}s") from None
-        if result.returncode != 0:
-            raise ProcessingError(" ".join(cmd), result.returncode, result.stderr)
+        _run_command(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vn",  # No video
+                "-acodec",
+                "pcm_s16le",  # 16-bit PCM
+                "-ar",
+                "16000",  # 16kHz (Whisper expects this)
+                "-ac",
+                "1",  # Mono
+                audio_path,
+            ],
+            timeout=DEFAULT_FFMPEG_TIMEOUT,
+        )
 
         # Step 2: Load whisper model
         whisper_model = whisper.load_model(model)
