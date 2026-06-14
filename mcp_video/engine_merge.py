@@ -295,10 +295,20 @@ def _merge_with_transitions(
     # Audio: only include if clips have audio streams
     has_audio = any(probe(c).audio_codec is not None for c in clips)
     if has_audio:
+        # Crossfade audio with acrossfade so it overlaps by the SAME duration the
+        # video xfade overlaps. The old code concatenated audio at full length while
+        # xfade shortened the video timeline by transition_duration per transition,
+        # so audio ran longer than video and A/V drift accumulated with each cut.
+        audio_labels = [f"{i}:a" for i in range(n)]
         audio_parts = []
-        for i in range(n):
-            audio_parts.append(f"[{i}:a]")
-        audio_filter = "".join(audio_parts) + f"concat=n={n}:v=0:a=1[aout]"
+        for i in range(pairs):
+            a_out = f"at{i}" if i < pairs - 1 else "aout"
+            audio_parts.append(
+                f"[{audio_labels[i]}][{audio_labels[i + 1]}]"
+                f"acrossfade=d={transition_duration:.3f}[{a_out}]"
+            )
+            audio_labels[i + 1] = a_out
+        audio_filter = ";".join(audio_parts)
         filter_complex = f"{filter_str};{audio_filter}"
         map_args = ["-map", "[vout]", "-map", "[aout]"]
     else:
