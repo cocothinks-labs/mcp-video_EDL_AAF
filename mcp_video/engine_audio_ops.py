@@ -89,14 +89,20 @@ def _build_add_audio_args(
     args = ["-i", video_path, "-i", audio_path]
 
     if start_time:
+        # adelay and the volume/fade filters must share a single filtergraph:
+        # FFmpeg forbids combining -filter_complex and -af on the same output
+        # stream, so fold the filters into the complex chain after the delay.
         safe_delay = _escape_ffmpeg_filter_value(str(int(start_time * 1000)))
-        args.extend(["-filter_complex", f"[1:a]adelay={safe_delay}|{safe_delay}[a]"])
+        delay_chain = f"[1:a]adelay={safe_delay}|{safe_delay}"
+        if filters:
+            delay_chain += "," + ",".join(filters)
+        delay_chain += "[a]"
+        args.extend(["-filter_complex", delay_chain])
         args.extend(["-map", "0:v:0", "-map", "[a]"])
     else:
         args.extend(["-map", "0:v:0", "-map", "1:a:0"])
-
-    if filters:
-        args.extend(["-af", ",".join(filters)])
+        if filters:
+            args.extend(["-af", ",".join(filters)])
 
     args.extend(
         [

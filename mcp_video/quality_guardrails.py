@@ -77,6 +77,23 @@ class VisualQualityGuardrails:
     AUDIO_LUFS_MAX = -12
     AUDIO_TRUE_PEAK_MAX = -1  # dBTP
 
+    # Temporal-motion thresholds (issue #10): detect low-motion "slideshow"
+    # output that is technically clean but visually frozen.
+    #
+    # Metric: per-frame-pair temporal motion = mean luma (YAVG, 0-255) of the
+    # absolute inter-frame difference (FFmpeg ``tblend=all_mode=difference``).
+    # A frame pair below MOTION_STATIC_FRAME_FLOOR is "near-static". If the
+    # fraction of near-static frame pairs reaches MOTION_STATIC_FRACTION_MAX,
+    # the clip is flagged as slideshow-like / insufficient temporal motion.
+    #
+    # Calibration (320x240, 30fps synthetic fixtures): frozen clip -> static
+    # fraction 1.00; hard-cut slideshow -> ~0.98 (motion only at the cuts);
+    # genuinely moving / calm-but-real drift -> 0.00. The 0.90 cutoff leaves a
+    # wide margin on both sides, so a deliberately calm shot is not a false
+    # positive while a frozen export is caught.
+    MOTION_STATIC_FRAME_FLOOR = 0.35  # YAVG diff units below which a pair is near-static
+    MOTION_STATIC_FRACTION_MAX = 0.90  # >= this fraction of near-static pairs => slideshow-like
+
     def _run_ffprobe(self, video: str, filter_name: str) -> dict[str, Any]:
         """Run ffprobe with signalstats filter and parse results."""
         cmd = [
@@ -611,6 +628,134 @@ class VisualQualityGuardrails:
             },
         )
 
+    def _measure_temporal_motion(self, video: str) -> dict[str, Any]:
+        """Measure inter-frame temporal motion across the clip.
+
+        Uses FFmpeg's ``tblend=all_mode=difference`` to produce the absolute
+        difference between consecutive frames, then ``signalstats`` to read the
+        mean luma (YAVG) of each difference frame. A near-zero YAVG means the
+        two frames were almost identical (no motion).
+
+        Returns a dict with ``mean``, ``median``, ``static_fraction`` and
+        ``frames`` keys, or ``{"_error": ...}`` if analysis fails. Uses only
+        FFmpeg (no extra dependencies).
+        """
+        cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"movie={_escape_lavfi_path(video)},tblend=all_mode=difference,signalstats",
+            "-show_entries",
+            "frame_tags=lavfi.signalstats.YAVG",
+            "-of",
+            "json",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=QUALITY_GUARDRAILS_TIMEOUT)  # noqa: S603
+            if result.returncode != 0:
+                diagnostic = _diagnostic(
+                    "ffprobe_tblend_motion",
+                    "ffprobe returned nonzero exit",
+                    stderr_excerpt=result.stderr.strip()[:200],
+                )
+                logger.warning(
+                    "ffprobe tblend motion returned nonzero exit for %s: %s", video, result.stderr.strip()[:200]
+                )
+                return {"_error": diagnostic}
+            data = json.loads(result.stdout)
+            frames = data.get("frames", [])
+            values = []
+            for frame in frames:
+                tags = frame.get("tags", {})
+                if "lavfi.signalstats.YAVG" in tags:
+                    with contextlib.suppress(ValueError, TypeError):
+                        values.append(float(tags["lavfi.signalstats.YAVG"]))
+            # tblend emits one fewer diff frame than source frames; a single
+            # source frame yields no diff frames and cannot have "motion".
+            if not values:
+                diagnostic = _diagnostic("ffprobe_tblend_motion", "ffprobe returned no usable difference frames")
+                logger.warning("ffprobe tblend motion returned no usable frames for %s", video)
+                return {"_error": diagnostic}
+            values.sort()
+            n = len(values)
+            mean = sum(values) / n
+            median = values[n // 2] if n % 2 else (values[n // 2 - 1] + values[n // 2]) / 2
+            static = sum(1 for v in values if v < self.MOTION_STATIC_FRAME_FLOOR)
+            return {
+                "mean": mean,
+                "median": median,
+                "static_fraction": static / n,
+                "frames": n,
+            }
+        except subprocess.TimeoutExpired:
+            diagnostic = _diagnostic("ffprobe_tblend_motion", "ffprobe timed out")
+            logger.warning("ffprobe tblend motion timed out for %s", video)
+            return {"_error": diagnostic}
+        except json.JSONDecodeError:
+            diagnostic = _diagnostic("ffprobe_tblend_motion", "ffprobe returned invalid JSON")
+            logger.warning("ffprobe tblend motion returned invalid JSON for %s", video)
+            return {"_error": diagnostic}
+        except Exception as exc:
+            diagnostic = _diagnostic(
+                "ffprobe_tblend_motion", "ffprobe tblend motion failed", error_type=type(exc).__name__
+            )
+            logger.warning("ffprobe tblend motion failed for %s: %s: %s", video, type(exc).__name__, exc)
+            return {"_error": diagnostic}
+
+    def check_motion(self, video: str) -> QualityReport:
+        """Check the clip has enough temporal motion (not a frozen slideshow).
+
+        Image-to-video and social creative are expected to actually move. A clip
+        that is technically clean but visually frozen (a slideshow / Ken Burns
+        sequence with insufficient motion) is flagged here as an advisory
+        recommendation rather than a hard technical failure, matching issue #10.
+        """
+        stats = self._measure_temporal_motion(video)
+
+        if not stats or stats.get("_error") or "static_fraction" not in stats:
+            # Analysis failed: report as not-passed so the diagnostic surfaces,
+            # consistent with the other checks' failure semantics.
+            return QualityReport(
+                check_name="temporal_motion",
+                passed=False,
+                score=0.0,
+                message="Could not analyze temporal motion (analysis failed)",
+                details={"diagnostic": stats.get("_error")} if isinstance(stats, dict) else {},
+            )
+
+        static_fraction = stats["static_fraction"]
+        is_slideshow = static_fraction >= self.MOTION_STATIC_FRACTION_MAX
+
+        # Score scales inversely with how static the clip is: a fully static
+        # clip scores 0, a continuously-moving clip scores 100.
+        score = float(max(0.0, min(100.0, (1.0 - static_fraction) * 100.0)))
+
+        if is_slideshow:
+            message = (
+                f"Low temporal motion detected ({static_fraction * 100:.0f}% of frames are near-static). "
+                "Verify this isn't an unintended slideshow — image-to-video output should actually move."
+            )
+        else:
+            message = f"Temporal motion is adequate ({static_fraction * 100:.0f}% near-static frames)"
+
+        return QualityReport(
+            check_name="temporal_motion",
+            passed=not is_slideshow,
+            score=score,
+            message=message,
+            details={
+                "static_fraction": static_fraction,
+                "mean_motion": stats["mean"],
+                "median_motion": stats["median"],
+                "frames_analyzed": stats["frames"],
+                "static_frame_floor": self.MOTION_STATIC_FRAME_FLOOR,
+                "static_fraction_threshold": self.MOTION_STATIC_FRACTION_MAX,
+            },
+        )
+
     def run_all_checks(self, video: str) -> list[QualityReport]:
         """Run all quality checks and return reports."""
         checks = [
@@ -619,14 +764,27 @@ class VisualQualityGuardrails:
             self.check_saturation(video),
             self.check_audio_levels(video),
             self.check_color_balance(video),
+            self.check_motion(video),
         ]
         return checks
+
+    # Checks that are advisory only: they surface as recommendations but do not
+    # flip the binary technical gate (all_passed) or weight the overall score.
+    # Temporal motion is advisory because a deliberately calm shot is valid
+    # creative output; the goal (issue #10) is to *warn* about unintended
+    # slideshows, not to hard-fail an otherwise technically clean video.
+    ADVISORY_CHECKS = ("temporal_motion",)
 
     def generate_report(self, video: str) -> dict[str, Any]:
         """Generate comprehensive quality report."""
         checks = self.run_all_checks(video)
-        overall_score = sum(c.score for c in checks) / len(checks)
-        all_passed = all(c.passed for c in checks)
+
+        # The technical gate (overall_score, all_passed) is computed from the
+        # non-advisory checks only, so a low-motion finding stays a
+        # recommendation instead of silently failing a clean video.
+        gating = [c for c in checks if c.check_name not in self.ADVISORY_CHECKS]
+        overall_score = sum(c.score for c in gating) / len(gating) if gating else 0.0
+        all_passed = all(c.passed for c in gating)
 
         return {
             "video": video,

@@ -199,6 +199,63 @@ class AnalysisMixin:
         else:
             return 0.6
 
+    def _measure_temporal_motion(self, video_path: str) -> dict | None:
+        """Measure inter-frame temporal motion across the clip.
+
+        Uses FFmpeg's ``tblend=all_mode=difference`` to compute the absolute
+        difference between consecutive frames, then reads ``signalstats`` YAVG
+        (mean luma, 0-255) of each difference frame. Near-zero YAVG means the
+        frames are almost identical (no motion). FFmpeg-only — no extra deps.
+
+        Returns a dict with ``static_fraction``/``mean``/``median``/``frames``,
+        or ``None`` if analysis fails (caller must treat None as "unknown" and
+        not fabricate a passing result).
+        """
+        floor = getattr(self, "MOTION_STATIC_FRAME_FLOOR", 0.35)
+        cmd = [
+            "ffmpeg",
+            "-i",
+            video_path,
+            "-vf",
+            "tblend=all_mode=difference,signalstats,metadata=mode=print",
+            "-f",
+            "null",
+            "-",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=DEFAULT_FFMPEG_TIMEOUT)  # noqa: S603
+        except subprocess.TimeoutExpired:
+            logger.warning("ffmpeg tblend motion timed out for %s", video_path)
+            return None
+        except Exception as exc:
+            logger.warning("ffmpeg tblend motion failed for %s: %s", video_path, exc)
+            return None
+
+        if result.returncode != 0:
+            logger.warning("ffmpeg tblend motion failed for %s: %s", video_path, result.stderr[:200])
+            return None
+
+        values: list[float] = []
+        for line in result.stderr.split("\n"):
+            if "lavfi.signalstats.YAVG" in line:
+                with contextlib.suppress(ValueError, IndexError):
+                    values.append(float(line.split("=")[-1].strip()))
+
+        if not values:
+            logger.warning("No tblend YAVG difference frames found for %s", video_path)
+            return None
+
+        values.sort()
+        n = len(values)
+        median = values[n // 2] if n % 2 else (values[n // 2 - 1] + values[n // 2]) / 2
+        static = sum(1 for v in values if v < floor)
+        return {
+            "static_fraction": static / n,
+            "mean": sum(values) / n,
+            "median": median,
+            "frames": n,
+        }
+
     def _analyze_composition(self, video_path: str) -> float | None:
         """Analyze composition quality (0-1)."""
         # Not yet implemented - requires computer vision

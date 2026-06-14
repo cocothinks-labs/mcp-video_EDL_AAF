@@ -32,7 +32,7 @@ from .validation import (
 )
 from .errors import MCPVideoError
 from .ffmpeg_helpers import _escape_ffmpeg_filter_value, _validate_input_path, _validate_output_path
-from .models import EditResult, NamedPosition, Timeline, TimelineImageOverlay
+from .models import EditResult, NamedPosition, Timeline, TimelineClip, TimelineImageOverlay
 
 
 def edit_timeline(timeline: Timeline | dict, output_path: str | None = None) -> EditResult:
@@ -53,9 +53,7 @@ def edit_timeline(timeline: Timeline | dict, output_path: str | None = None) -> 
             current = composited
 
         if audio_clips:
-            final = os.path.join(tmpdir, "with_audio.mp4")
-            add_audio(current, audio_clips[0], output_path=final)
-            current = final
+            current = _apply_timeline_audio(current, audio_clips, tmpdir)
 
         if timeline.width and timeline.height:
             info = probe(current)
@@ -71,6 +69,32 @@ def edit_timeline(timeline: Timeline | dict, output_path: str | None = None) -> 
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def _apply_timeline_audio(current: str, audio_clips: list[TimelineClip], tmpdir: str) -> str:
+    """Attach every timeline audio clip, honoring each clip's timing/volume/fade.
+
+    The first audio clip establishes the base audio track (replacing the source
+    audio, matching the original single-clip behavior). Every subsequent clip is
+    layered on top with ``mix=True`` so additional voiceover/music tracks are not
+    silently dropped. Each clip's ``start`` maps to ``start_time`` and its
+    ``volume``/``fade_in``/``fade_out`` are forwarded to ``add_audio`` rather than
+    being discarded.
+    """
+    for index, clip in enumerate(audio_clips):
+        layered = os.path.join(tmpdir, f"with_audio_{index:04d}.mp4")
+        add_audio(
+            current,
+            audio_path=clip.source,
+            volume=clip.volume,
+            fade_in=clip.fade_in,
+            fade_out=clip.fade_out,
+            start_time=clip.start if clip.start else None,
+            mix=index > 0,
+            output_path=layered,
+        )
+        current = layered
+    return current
+
+
 def _validate_timeline_positions(timeline: Timeline) -> None:
     for track in timeline.tracks:
         for elem in track.elements:
@@ -81,7 +105,7 @@ def _validate_timeline_positions(timeline: Timeline) -> None:
 
 def _collect_tracks(timeline: Timeline, tmpdir: str):
     video_clips: list[str] = []
-    audio_clips: list[str] = []
+    audio_clips: list[TimelineClip] = []
     text_elements: list = []
     image_overlays: list[TimelineImageOverlay] = []
 
@@ -89,13 +113,19 @@ def _collect_tracks(timeline: Timeline, tmpdir: str):
         if track.type == "video":
             for clip in track.clips:
                 _validate_input_path(clip.source)
-                if clip.trim_start > 0 or clip.trim_end:
+                # Trim whenever any window is requested: a start offset, an
+                # explicit end, OR a duration. ``duration`` is an independent
+                # trigger so a clip with ``trim_start=0`` and ``duration`` set
+                # (no ``trim_end``) is still trimmed instead of appended whole
+                # (see #6). Precedence when both are present: ``trim_end`` wins,
+                # because it pins an absolute end on the source timeline.
+                if clip.trim_start > 0 or clip.trim_end is not None or clip.duration is not None:
                     trimmed = os.path.join(tmpdir, f"v_{len(video_clips):04d}.mp4")
                     trim_kwargs = {"start": clip.trim_start}
-                    if clip.duration:
-                        trim_kwargs["duration"] = clip.duration
-                    elif clip.trim_end:
+                    if clip.trim_end is not None:
                         trim_kwargs["end"] = clip.trim_end
+                    elif clip.duration is not None:
+                        trim_kwargs["duration"] = clip.duration
                     result = trim(clip.source, output_path=trimmed, **trim_kwargs)
                     video_clips.append(result.output_path)
                 else:
@@ -104,7 +134,7 @@ def _collect_tracks(timeline: Timeline, tmpdir: str):
         elif track.type == "audio":
             for clip in track.clips:
                 _validate_input_path(clip.source)
-                audio_clips.append(clip.source)
+                audio_clips.append(clip)
         elif track.type == "text":
             text_elements.extend(track.elements)
         elif track.type == "image":

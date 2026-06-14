@@ -46,6 +46,16 @@ class DesignQualityGuardrails(ChecksMixin, ScoringMixin, ProbeMixin, AnalysisMix
     IDEAL_ANIMATION_FPS = 30
     JUDDER_THRESHOLD = 0.5  # variance threshold for smooth motion
 
+    # Temporal-motion standards (issue #10): catch low-motion "slideshow" output
+    # that is technically clean but visually frozen. Per-frame-pair motion is the
+    # mean luma (0-255) of the absolute inter-frame difference; a pair below the
+    # floor is "near-static". If at least MOTION_STATIC_FRACTION_MAX of pairs are
+    # near-static, the clip reads as a slideshow / insufficient temporal motion.
+    # Calibrated on 30fps fixtures: frozen 1.00, hard-cut slideshow ~0.98,
+    # genuinely-moving / calm drift 0.00 — so the 0.90 cutoff has wide margin.
+    MOTION_STATIC_FRAME_FLOOR = 0.35
+    MOTION_STATIC_FRACTION_MAX = 0.90
+
     # Hierarchy standards
     MIN_SIZE_RATIO = 1.5  # Minimum size difference for hierarchy levels
     IDEAL_SIZE_RATIO = 2.0  # Ideal size difference

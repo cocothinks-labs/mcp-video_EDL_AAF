@@ -366,13 +366,14 @@ class TestVisualQualityGuardrails:
 
         checks = guardrails.run_all_checks(video_path)
 
-        assert len(checks) == 5
+        assert len(checks) == 6
         check_names = [c.check_name for c in checks]
         assert "brightness" in check_names
         assert "contrast" in check_names
         assert "saturation" in check_names
         assert "audio_levels" in check_names
         assert "color_balance" in check_names
+        assert "temporal_motion" in check_names
 
     def test_generate_report(self, guardrails, tmp_path):
         """Test generating comprehensive quality report."""
@@ -389,7 +390,7 @@ class TestVisualQualityGuardrails:
         assert isinstance(report["overall_score"], (int, float))
         assert isinstance(report["all_passed"], bool)
         assert isinstance(report["checks"], list)
-        assert len(report["checks"]) == 5
+        assert len(report["checks"]) == 6
         assert report["video"] == video_path
 
 

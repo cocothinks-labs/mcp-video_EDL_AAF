@@ -109,6 +109,68 @@ class TestEditTimeline:
         assert os.path.isfile(result.output_path)
         assert result.success is True
 
+    def test_clip_duration_trims_with_zero_trim_start(self, sample_video, tmp_path):
+        """Regression for #6: a clip with duration but trim_start=0 and no
+        trim_end must be trimmed to that duration, not appended untrimmed.
+
+        sample_video is 3s; trimming to 1.5s must yield a ~1.5s output.
+        """
+        target = 1.5
+        out = str(tmp_path / "duration_only.mp4")
+        tl = Timeline(
+            width=640,
+            height=480,
+            tracks=[
+                TimelineTrack(
+                    type="video",
+                    clips=[TimelineClip(source=sample_video, duration=target)],
+                ),
+            ],
+        )
+        result = edit_timeline(tl, output_path=out)
+        info = probe(result.output_path)
+        assert abs(info.duration - target) < 0.5, (
+            f"expected ~{target}s, got {info.duration}s (clip appended untrimmed?)"
+        )
+
+    def test_clip_duration_with_trim_start_offset(self, sample_video, tmp_path):
+        """Regression for #6 adjacent case: trim_start>0 + duration trims to
+        the requested window length (start .. start+duration)."""
+        target = 1.0
+        out = str(tmp_path / "trim_start_plus_duration.mp4")
+        tl = Timeline(
+            width=640,
+            height=480,
+            tracks=[
+                TimelineTrack(
+                    type="video",
+                    clips=[TimelineClip(source=sample_video, trim_start=0.5, duration=target)],
+                ),
+            ],
+        )
+        result = edit_timeline(tl, output_path=out)
+        info = probe(result.output_path)
+        assert abs(info.duration - target) < 0.5, f"expected ~{target}s, got {info.duration}s"
+
+    def test_clip_duration_matching_trim_end_agrees(self, sample_video, tmp_path):
+        """Regression for #6 precedence: when trim_start=0 and duration equals
+        the trim_end value, the output length equals that agreed value."""
+        target = 1.0
+        out = str(tmp_path / "duration_and_trim_end.mp4")
+        tl = Timeline(
+            width=640,
+            height=480,
+            tracks=[
+                TimelineTrack(
+                    type="video",
+                    clips=[TimelineClip(source=sample_video, trim_end=target, duration=target)],
+                ),
+            ],
+        )
+        result = edit_timeline(tl, output_path=out)
+        info = probe(result.output_path)
+        assert abs(info.duration - target) < 0.5, f"expected ~{target}s, got {info.duration}s"
+
     @requires_filter("drawtext", "Text overlay")
     def test_multiple_clips_with_text(self, sample_video):
         tl = Timeline(
@@ -176,6 +238,112 @@ class TestEditTimeline:
         tl = Timeline(tracks=[])
         with pytest.raises(MCPVideoError):
             edit_timeline(tl)
+
+    # --- Issue #8: audio clip fields must be honored, not silently dropped ----
+    def test_collect_tracks_preserves_audio_clip_fields(self, sample_video, sample_audio):
+        """start/volume/fade_in/fade_out on an audio clip must survive collection (issue #8).
+
+        Regresses the silent drop where _collect_tracks reduced each audio clip
+        to its source string, discarding timing/volume/fade fields entirely.
+        """
+        from mcp_video.engine_timeline import _collect_tracks
+
+        tl = Timeline(
+            width=640,
+            height=480,
+            tracks=[
+                TimelineTrack(type="video", clips=[TimelineClip(source=sample_video)]),
+                TimelineTrack(
+                    type="audio",
+                    clips=[TimelineClip(source=sample_audio, start=0.5, volume=1.4, fade_in=0.2, fade_out=0.4)],
+                ),
+            ],
+        )
+        _video, audio_clips, _text, _images = _collect_tracks(tl, tmpdir="/tmp")
+
+        clip = audio_clips[0]
+        # The collected clip must carry the timing/volume/fade fields, not just the source path.
+        assert clip.source == sample_audio
+        assert clip.start == 0.5
+        assert clip.volume == 1.4
+        assert clip.fade_in == 0.2
+        assert clip.fade_out == 0.4
+
+    def test_timeline_passes_every_audio_clip_field_to_add_audio(self, sample_video, sample_audio, tmp_path):
+        """edit_timeline must forward each audio clip's fields to add_audio (issue #8).
+
+        Spies on add_audio: the FIRST clip must replace/set audio with its
+        start/volume/fade, and the SECOND clip must be mixed (mix=True) with its
+        own fields — proving neither the second clip nor any field is dropped.
+        """
+        from unittest.mock import patch
+
+        out = str(tmp_path / "timeline_multi_audio.mp4")
+        tl = Timeline(
+            width=640,
+            height=480,
+            tracks=[
+                TimelineTrack(type="video", clips=[TimelineClip(source=sample_video)]),
+                TimelineTrack(
+                    type="audio",
+                    clips=[
+                        TimelineClip(source=sample_audio, start=0.5, volume=1.4, fade_in=0.2, fade_out=0.4),
+                        TimelineClip(source=sample_audio, start=0.0, volume=0.2),
+                    ],
+                ),
+            ],
+        )
+
+        with patch("mcp_video.engine_timeline.add_audio", wraps=add_audio) as spy:
+            result = edit_timeline(tl, output_path=out)
+
+        # One add_audio call per audio clip — the second clip is not dropped.
+        assert spy.call_count == 2
+
+        first_kwargs = spy.call_args_list[0].kwargs
+        second_kwargs = spy.call_args_list[1].kwargs
+
+        # First clip: fields honored, set as the base audio (mix not forced on).
+        assert first_kwargs["audio_path"] == sample_audio
+        assert first_kwargs["start_time"] == 0.5
+        assert first_kwargs["volume"] == 1.4
+        assert first_kwargs["fade_in"] == 0.2
+        assert first_kwargs["fade_out"] == 0.4
+        assert first_kwargs.get("mix") is not True
+
+        # Second clip: layered in via mix, with its own fields honored.
+        # A zero start needs no delay, so start_time is normalized to None.
+        assert second_kwargs["audio_path"] == sample_audio
+        assert second_kwargs["start_time"] is None
+        assert second_kwargs["volume"] == 0.2
+        assert second_kwargs["mix"] is True
+
+        assert os.path.isfile(result.output_path)
+        assert result.success is True
+
+    def test_timeline_honors_audio_clip_fields_end_to_end(self, sample_video, sample_audio, tmp_path):
+        """edit_timeline must render a real file with audio fields + multiple clips (issue #8)."""
+        out = str(tmp_path / "timeline_multi_audio_real.mp4")
+        tl = Timeline(
+            width=640,
+            height=480,
+            tracks=[
+                TimelineTrack(type="video", clips=[TimelineClip(source=sample_video)]),
+                TimelineTrack(
+                    type="audio",
+                    clips=[
+                        TimelineClip(source=sample_audio, start=0.5, volume=0.9, fade_in=0.2, fade_out=0.4),
+                        TimelineClip(source=sample_audio, start=0.0, volume=0.2),
+                    ],
+                ),
+            ],
+        )
+        result = edit_timeline(tl, output_path=out)
+        assert os.path.isfile(result.output_path)
+        assert result.success is True
+        # The rendered file must carry an audio stream from the mixed clips.
+        info = probe(result.output_path)
+        assert info.audio_codec is not None
 
 
 class TestConvertMov:

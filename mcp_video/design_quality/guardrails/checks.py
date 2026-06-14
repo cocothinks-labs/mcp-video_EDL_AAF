@@ -196,6 +196,25 @@ class ChecksMixin:
                 )
             )
 
+        # Check for insufficient temporal motion (slideshow / frozen output).
+        # A clip can have fine fps and no judder yet still be a static slideshow;
+        # fps alone cannot catch that, so measure real inter-frame motion. This
+        # is advisory (warning) — a deliberately calm shot is valid output.
+        motion = self._measure_temporal_motion(video_path)
+        if motion is not None and motion["static_fraction"] >= self.MOTION_STATIC_FRACTION_MAX:
+            self.issues.append(
+                DesignIssue(
+                    category="motion",
+                    severity="warning",
+                    message=(
+                        f"Low temporal motion detected ({motion['static_fraction'] * 100:.0f}% of frames "
+                        "are near-static). Verify this isn't an unintended slideshow — image-to-video "
+                        "output should actually move."
+                    ),
+                    fix_available=False,
+                )
+            )
+
     def _check_composition(self, video_path: str):
         """Check composition: balance, focal points, visual weight."""
         # Analyze frame composition

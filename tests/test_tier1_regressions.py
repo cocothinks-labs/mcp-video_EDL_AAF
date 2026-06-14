@@ -65,6 +65,43 @@ def test_add_audio_mix_with_start_time_applies_delay(sample_video, sample_audio,
     assert info.duration >= 5.5
 
 
+# --- BUG-8 (issue #8): replace-branch start_time + volume/fade must coexist -----
+
+
+def test_add_audio_replace_with_start_time_and_filters(sample_video, sample_audio, tmp_path):
+    """start_time emits -filter_complex (adelay) while volume/fade emitted -af on
+    the SAME output stream — FFmpeg rejects mixing simple and complex filtering.
+    The delay and the volume/fade filters must share one filtergraph chain."""
+    out = str(tmp_path / "delayed_faded.mp4")
+    result = add_audio(
+        sample_video,
+        sample_audio,
+        volume=0.5,
+        fade_in=0.2,
+        fade_out=0.3,
+        start_time=0.5,
+        output_path=out,
+    )
+    assert result.success
+    info = probe(out)
+    assert info.audio_codec is not None
+
+
+def test_build_add_audio_args_folds_filters_into_delay_chain():
+    """Unit pin: when start_time and filters coexist on the replace branch, no
+    separate -af flag is emitted; filters ride inside the -filter_complex chain."""
+    from mcp_video.engine_audio_ops import _build_add_audio_args
+
+    args = _build_add_audio_args(
+        "vid.mp4", "aud.wav", ["volume=0.5", "afade=t=in:st=0:d=0.2"], False, 0.5, False, "out.mp4"
+    )
+    assert "-af" not in args
+    fc = args[args.index("-filter_complex") + 1]
+    assert "adelay=500|500" in fc
+    assert "volume=0.5" in fc
+    assert "afade=t=in:st=0:d=0.2" in fc
+
+
 # --- BUG-3: merge with transitions when audio presence differs across clips ----
 
 
