@@ -6,7 +6,7 @@ import logging
 import warnings as _warnings
 
 from .defaults import DEFAULT_AUDIO_BITRATE
-from .engine_probe import probe
+from .engine_probe import probe, probe_audio_input
 from .engine_runtime_utils import (
     _build_edit_result,
     _has_audio,
@@ -147,9 +147,12 @@ def add_audio(
             f"near peak, this may cause digital clipping/distortion.",
             stacklevel=2,
         )
-    # Validate timing/probe-based checks (best-effort, may fail for audio-only)
+    # Validate timing/probe-based checks. The attached audio is commonly an
+    # audio-only file (e.g. a voiceover WAV), so probe it with an audio-aware
+    # probe instead of the video-only ``probe`` — otherwise a valid WAV is
+    # misreported as "No video stream found" (issue #7).
     try:
-        audio_info = probe(audio_path)
+        audio_info = probe_audio_input(audio_path)
         mix_warnings = validate_audio_mix(
             video_info,
             audio_info,

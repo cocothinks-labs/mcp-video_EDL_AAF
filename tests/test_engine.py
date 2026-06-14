@@ -18,6 +18,7 @@ from mcp_video.engine import (
     merge,
     preview,
     probe,
+    probe_audio_input,
     reverse,
     storyboard,
     speed,
@@ -79,6 +80,33 @@ class TestProbe:
 
         with pytest.raises(InputFileError):
             probe(str(video))
+
+    def test_probe_audio_input_on_video(self, sample_video):
+        """probe_audio_input must defer to the normal video probe for video."""
+        info = probe_audio_input(sample_video)
+        assert isinstance(info, VideoInfo)
+        assert info.width == 640
+        assert info.height == 480
+
+    def test_probe_audio_input_on_audio_only_wav(self, sample_audio_wav):
+        """Issue #7: an audio-only WAV must probe without raising and must
+        carry audio metadata, not be rejected for lacking a video stream."""
+        info = probe_audio_input(sample_audio_wav)
+        assert isinstance(info, VideoInfo)
+        assert info.duration > 0
+        assert info.audio_codec is not None
+        assert info.audio_sample_rate is not None
+        # No video stream: video-shaped fields are zeroed, not fabricated.
+        assert info.width == 0
+        assert info.height == 0
+
+    def test_probe_audio_input_corrupted_still_raises(self, tmp_path):
+        """A genuinely broken input still fails — the fallback is audio-aware,
+        not a blanket swallow of probe errors."""
+        bad = tmp_path / "corrupted.wav"
+        bad.write_bytes(b"not a real media file")
+        with pytest.raises(InputFileError):
+            probe_audio_input(str(bad))
 
     def test_resolution_property(self, sample_video):
         info = probe(sample_video)
@@ -267,6 +295,24 @@ class TestAddAudio:
             fade_out=0.5,
         )
         assert os.path.isfile(result.output_path)
+
+    def test_audio_only_wav_no_video_stream_warning(self, sample_video, sample_audio_wav):
+        """Regression for #7: a valid audio-only WAV must not be probed as
+        video, which produced a misleading 'No video stream found' guardrail
+        warning even though the input was a perfectly valid audio file."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = add_audio(sample_video, sample_audio_wav)
+
+        assert os.path.isfile(result.output_path)
+        messages = [str(w.message) for w in caught]
+        offending = [m for m in messages if "No video stream" in m or "Could not validate audio mix" in m]
+        assert not offending, (
+            "valid audio-only WAV should not trigger a video-stream guardrail "
+            f"warning, got: {offending}"
+        )
 
 
 class TestResize:

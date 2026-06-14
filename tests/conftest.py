@@ -102,6 +102,41 @@ def sample_audio(tmp_path_factory) -> str:
 
 
 @pytest.fixture(scope="session")
+def sample_audio_wav(tmp_path_factory) -> str:
+    """Create a 5-second audio-only WAV file (no video stream).
+
+    Regression fixture for issue #7: a valid audio-only input must not be
+    probed as if it were a video, which previously raised a misleading
+    "No video stream found" guardrail warning.
+    """
+    if not has_ffmpeg():
+        pytest.skip("FFmpeg not installed")
+
+    audio_path = str(tmp_path_factory.mktemp("audio") / "test_audio.wav")
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=880:duration=5",
+            "-c:a",
+            "pcm_s16le",
+            audio_path,
+        ],
+        capture_output=True,
+        timeout=30,
+    )
+
+    if not os.path.isfile(audio_path):
+        pytest.skip("Could not generate test audio WAV")
+
+    return audio_path
+
+
+@pytest.fixture(scope="session")
 def sample_srt(tmp_path_factory) -> str:
     """Create a sample SRT subtitle file."""
     srt_dir = tmp_path_factory.mktemp("subs")
