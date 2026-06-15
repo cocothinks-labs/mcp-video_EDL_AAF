@@ -304,8 +304,7 @@ def _merge_with_transitions(
         for i in range(pairs):
             a_out = f"at{i}" if i < pairs - 1 else "aout"
             audio_parts.append(
-                f"[{audio_labels[i]}][{audio_labels[i + 1]}]"
-                f"acrossfade=d={transition_duration:.3f}[{a_out}]"
+                f"[{audio_labels[i]}][{audio_labels[i + 1]}]acrossfade=d={transition_duration:.3f}[{a_out}]"
             )
             audio_labels[i + 1] = a_out
         audio_filter = ";".join(audio_parts)

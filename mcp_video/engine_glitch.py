@@ -152,9 +152,7 @@ def glitch_scanline_jitter(
     width = int(stream.get("width") or stream.get("coded_width") or 0)
     height = int(stream.get("height") or stream.get("coded_height") or 0)
     if width <= 0 or height <= 0:
-        raise ProcessingError(
-            f"ffprobe {input_path}", 1, "could not determine video dimensions for scanline jitter"
-        )
+        raise ProcessingError(f"ffprobe {input_path}", 1, "could not determine video dimensions for scanline jitter")
     bands = max(1, (height + row_height - 1) // row_height)
 
     # x-map luma per band-row (X is always 0 on the 1-px-wide map; Y = band index):
@@ -241,9 +239,7 @@ def glitch_screen_tearing(
         rnd_off = 78.233 + i * 13.77
         # Each band is gated so only narrow Y ranges (where sin > 0.95) tear.
         s = f"sin(Y*{freq:.4f}+T*{speed:.4f}+{phase:.4f})"
-        tear_exprs.append(
-            f"{amp:.4f}*(gt({s},0.95))*{s}*sin(Y*{rnd_freq:.4f}+{rnd_off:.4f})"
-        )
+        tear_exprs.append(f"{amp:.4f}*(gt({s},0.95))*{s}*sin(Y*{rnd_freq:.4f}+{rnd_off:.4f})")
 
     displacement = "+".join(tear_exprs) if tear_exprs else "0"
     # x-map row value: 128 (no shift) plus the summed tear displacement, clamped
@@ -317,9 +313,7 @@ def glitch_vhs_tracking(
     width = int(stream.get("width") or stream.get("coded_width") or 0)
     height = int(stream.get("height") or stream.get("coded_height") or 0)
     if width <= 0 or height <= 0:
-        raise ProcessingError(
-            f"ffprobe {input_path}", 1, "could not determine video dimensions for vhs tracking"
-        )
+        raise ProcessingError(f"ffprobe {input_path}", 1, "could not determine video dimensions for vhs tracking")
 
     # 1. Rolling horizontal band: sin-based X offset varying with Y and time
     # Uses ternary (if(x,1,0)) to create discrete band steps instead of step()
