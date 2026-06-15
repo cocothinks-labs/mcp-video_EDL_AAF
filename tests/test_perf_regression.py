@@ -34,11 +34,7 @@ _TIMEOUT_S = 90
 
 
 def _make_clip(path: str, color: str | None = None) -> None:
-    src = (
-        f"testsrc2=s={_W}x{_H}:d={_D}:r=30"
-        if color is None
-        else f"color=c={color}:s={_W}x{_H}:d={_D}:r=30"
-    )
+    src = f"testsrc2=s={_W}x{_H}:d={_D}:r=30" if color is None else f"color=c={color}:s={_W}x{_H}:d={_D}:r=30"
     subprocess.run(
         ["ffmpeg", "-y", "-f", "lavfi", "-i", src, "-pix_fmt", "yuv420p", path],
         check=True,
@@ -78,9 +74,7 @@ def test_glitch_effect_is_not_a_perf_bomb(effect, hd_clip, tmp_path):
 
 
 @pytest.mark.timeout(_TIMEOUT_S)
-@pytest.mark.parametrize(
-    "transition", [transition_pixelate, transition_glitch], ids=lambda f: f.__name__
-)
+@pytest.mark.parametrize("transition", [transition_pixelate, transition_glitch], ids=lambda f: f.__name__)
 def test_transition_is_not_a_perf_bomb(transition, hd_clip, hd_clip2, tmp_path):
     out = str(tmp_path / "out.mp4")
     transition(hd_clip, hd_clip2, out)

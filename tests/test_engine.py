@@ -310,8 +310,7 @@ class TestAddAudio:
         messages = [str(w.message) for w in caught]
         offending = [m for m in messages if "No video stream" in m or "Could not validate audio mix" in m]
         assert not offending, (
-            "valid audio-only WAV should not trigger a video-stream guardrail "
-            f"warning, got: {offending}"
+            f"valid audio-only WAV should not trigger a video-stream guardrail warning, got: {offending}"
         )
 
 
