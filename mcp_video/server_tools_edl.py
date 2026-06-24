@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from typing import Annotated
 
 from pydantic import Field
@@ -253,6 +254,11 @@ def video_export_aescript_from_timeline(
     )
 
 
+def _default_output_base() -> str | None:
+    """Return MCP_VIDEO_OUTPUT_BASE env var if set, else None."""
+    return os.environ.get("MCP_VIDEO_OUTPUT_BASE")
+
+
 @mcp.tool()
 @_safe_tool
 def video_export_edit_package(
@@ -264,14 +270,20 @@ def video_export_edit_package(
             )
         ),
     ],
-    output_dir: Annotated[
-        str,
-        Field(description="Directory where both the .edl and .jsx files will be written."),
-    ],
     title: Annotated[
         str,
-        Field(description="Title used for both the EDL header and the AE composition name."),
+        Field(description="Project title. Used as subfolder name and as EDL/AE composition name."),
     ] = "mcp-video export",
+    output_dir: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Override output directory. If omitted, files are saved to "
+                "{MCP_VIDEO_OUTPUT_BASE}/{title}/. "
+                "MCP_VIDEO_OUTPUT_BASE must be set as an environment variable when omitted."
+            )
+        ),
+    ] = None,
     fps: Annotated[
         float,
         Field(description="Frame rate of the footage.", gt=0),
@@ -287,14 +299,31 @@ def video_export_edit_package(
 ) -> dict:
     """Export both a CMX3600 EDL and an After Effects JSX script in one operation.
 
-    Produces two files in output_dir:
+    Produces two files inside a project subfolder:
     - <title>.edl  → import into Premiere Pro via File > Import
     - <title>.jsx  → run in After Effects via File > Scripts > Run Script File
 
-    Use this when you want to give the edit to both Premiere and AE editors, or
-    when you're unsure which NLE the retouching will happen in.
+    Output location (in priority order):
+    1. output_dir parameter (if provided)
+    2. {MCP_VIDEO_OUTPUT_BASE}/{title}/ (if MCP_VIDEO_OUTPUT_BASE env var is set)
+
+    Set MCP_VIDEO_OUTPUT_BASE to your default projects folder so you never have
+    to type the full path — just provide the project title.
     """
     safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in title)
+
+    if output_dir is None:
+        base = _default_output_base()
+        if not base:
+            from .errors import MCPVideoError
+            raise MCPVideoError(
+                "output_dir not provided and MCP_VIDEO_OUTPUT_BASE env var is not set. "
+                "Either pass output_dir or set MCP_VIDEO_OUTPUT_BASE to your default projects folder.",
+                error_type="validation_error",
+                code="missing_output_dir",
+            )
+        output_dir = os.path.join(base, safe_title)
+
     edl_path = os.path.join(output_dir, f"{safe_title}.edl")
     jsx_path = os.path.join(output_dir, f"{safe_title}.jsx")
 
