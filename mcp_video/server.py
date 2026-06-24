@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from .server_tools_edl import (
+    video_export_edl as video_export_edl,
+    video_export_edl_from_timeline as video_export_edl_from_timeline,
+)
 from .server_app import _error_result as _error_result
 from .server_app import _result as _result
 from .server_app import mcp as mcp
