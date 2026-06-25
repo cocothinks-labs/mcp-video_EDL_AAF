@@ -1,23 +1,25 @@
 """EDL (Edit Decision List) export engine — generates CMX3600 files for NLEs like Premiere Pro.
 
-Added by cocothinks-labs: https://github.com/cocothinks-labs/mcp-video
+Added by cocothinks-labs: https://github.com/cocothinks-labs/mcp-video_EDL_AAF
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+from .engine_probe import probe
 from .errors import MCPVideoError
-from .models import Timeline, TimelineClip
+from .models import Timeline
 
 
 @dataclass
 class EDLClip:
     """One edit decision: a source clip trimmed to [src_in, src_out)."""
+
     source_path: str
-    src_in: float   # seconds in source file
-    src_out: float  # seconds in source file
+    src_in: float
+    src_out: float
 
 
 @dataclass
@@ -40,10 +42,9 @@ def _seconds_to_timecode(seconds: float, fps: float) -> str:
     return f"{hh:02d}:{mm:02d}:{ss:02d}:{ff:02d}"
 
 
-def _reel_name(index: int, source_path: str) -> str:
-    """Return an 8-char reel identifier. CMX3600 limit is 8 chars."""
+def _reel_name(source_path: str) -> str:
+    """Return an 8-char reel name from the source filename stem (CMX3600 limit)."""
     stem = os.path.splitext(os.path.basename(source_path))[0]
-    # Use stem truncated to 8 chars so Premiere shows a meaningful name
     return stem[:8].ljust(8)
 
 
@@ -53,10 +54,11 @@ def export_edl_from_clips(
     title: str = "mcp-video export",
     fps: float = 25.0,
 ) -> EDLResult:
-    """Write a CMX3600 EDL file from a list of EDLClip decisions.
+    """Write a CMX3600 EDL file from a list of EDLClip edit decisions.
 
     Premiere Pro imports CMX3600 via File > Import. Each clip becomes one
-    V-track cut event. Audio is not included (A tracks require a separate pass).
+    V-track cut event. Audio tracks are not included (A-track events are
+    out of scope for this tool).
     """
     if not clips:
         raise MCPVideoError(
@@ -65,28 +67,25 @@ def export_edl_from_clips(
             code="empty_clip_list",
         )
 
-    lines: list[str] = [
-        f"TITLE: {title}",
-        "FCM: NON-DROP FRAME",
-        "",
-    ]
+    lines: list[str] = [f"TITLE: {title}", "FCM: NON-DROP FRAME", ""]
 
     rec_pos = 0.0
     for idx, clip in enumerate(clips, start=1):
         duration = clip.src_out - clip.src_in
         if duration <= 0:
             raise MCPVideoError(
-                f"Clip {idx} has zero or negative duration (src_in={clip.src_in}, src_out={clip.src_out})",
+                f"Clip {idx} has zero or negative duration "
+                f"(src_in={clip.src_in}, src_out={clip.src_out})",
                 error_type="validation_error",
                 code="invalid_clip_duration",
             )
 
-        src_in_tc  = _seconds_to_timecode(clip.src_in,  fps)
+        src_in_tc = _seconds_to_timecode(clip.src_in, fps)
         src_out_tc = _seconds_to_timecode(clip.src_out, fps)
-        rec_in_tc  = _seconds_to_timecode(rec_pos,            fps)
-        rec_out_tc = _seconds_to_timecode(rec_pos + duration,  fps)
-        reel       = _reel_name(idx, clip.source_path)
-        clip_name  = os.path.basename(clip.source_path)
+        rec_in_tc = _seconds_to_timecode(rec_pos, fps)
+        rec_out_tc = _seconds_to_timecode(rec_pos + duration, fps)
+        reel = _reel_name(clip.source_path)
+        clip_name = os.path.basename(clip.source_path)
 
         lines.append(f"{idx:03d}  {reel} V     C        {src_in_tc} {src_out_tc} {rec_in_tc} {rec_out_tc}")
         lines.append(f"* FROM CLIP NAME: {clip_name}")
@@ -96,15 +95,11 @@ def export_edl_from_clips(
         rec_pos += duration
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    # newline="\r\n" translates every \n to \r\n on write — correct for CMX3600
     with open(output_path, "w", encoding="utf-8", newline="\r\n") as fh:
         fh.write("\n".join(lines))
 
-    return EDLResult(
-        output_path=output_path,
-        event_count=len(clips),
-        title=title,
-        fps=fps,
-    )
+    return EDLResult(output_path=output_path, event_count=len(clips), title=title, fps=fps)
 
 
 def export_edl_from_timeline(
@@ -116,8 +111,7 @@ def export_edl_from_timeline(
     """Convert a mcp-video Timeline JSON to a CMX3600 EDL.
 
     Reads the same Timeline structure accepted by video_edit / edit_timeline.
-    Only video tracks are included; audio tracks are ignored (EDL audio
-    requires separate A-track events, out of scope here).
+    Only video tracks are included; audio tracks are ignored.
     """
     if isinstance(timeline, dict):
         timeline = Timeline.model_validate(timeline)
@@ -136,20 +130,18 @@ def export_edl_from_timeline(
             elif clip.duration is not None:
                 src_out = src_in + clip.duration
             else:
-                # probe the file to get its full duration
                 try:
-                    from .engine_probe import probe
                     info = probe(clip.source)
                     src_out = float(info.duration)
                     if detected_fps is None and info.fps:
                         detected_fps = float(info.fps)
-                except Exception:
+                except Exception as exc:
                     raise MCPVideoError(
                         f"Cannot determine duration for clip '{clip.source}'. "
                         "Provide trim_end or duration in the timeline.",
                         error_type="validation_error",
                         code="missing_clip_duration",
-                    )
+                    ) from exc
 
             clips.append(EDLClip(source_path=clip.source, src_in=src_in, src_out=src_out))
 

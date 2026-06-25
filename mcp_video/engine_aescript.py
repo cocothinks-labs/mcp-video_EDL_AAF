@@ -14,7 +14,9 @@ import os
 from dataclasses import dataclass
 
 from .engine_edl import EDLClip
+from .engine_probe import probe
 from .errors import MCPVideoError
+from .models import Timeline
 
 
 @dataclass
@@ -189,7 +191,7 @@ def export_aescript_from_clips(
 
 
 def export_aescript_from_timeline(
-    timeline: object,  # Timeline | dict — avoid circular import
+    timeline: Timeline | dict,
     output_path: str,
     comp_name: str = "mcp-video export",
     fps: float | None = None,
@@ -197,8 +199,6 @@ def export_aescript_from_timeline(
     height: int | None = None,
 ) -> AEScriptResult:
     """Convert a mcp-video Timeline JSON to an After Effects JSX script."""
-    from .models import Timeline
-
     if isinstance(timeline, dict):
         timeline = Timeline.model_validate(timeline)
 
@@ -218,7 +218,6 @@ def export_aescript_from_timeline(
                 src_out = src_in + clip.duration
             else:
                 try:
-                    from .engine_probe import probe
                     info = probe(clip.source)
                     src_out = float(info.duration)
                     if detected_fps is None and info.fps:
@@ -227,13 +226,13 @@ def export_aescript_from_timeline(
                         detected_w = info.width
                     if detected_h is None and info.height:
                         detected_h = info.height
-                except Exception:
+                except Exception as exc:
                     raise MCPVideoError(
                         f"Cannot determine duration for clip '{clip.source}'. "
                         "Provide trim_end or duration in the timeline.",
                         error_type="validation_error",
                         code="missing_clip_duration",
-                    )
+                    ) from exc
             clips.append(EDLClip(source_path=clip.source, src_in=src_in, src_out=src_out))
 
     if not clips:
@@ -243,10 +242,9 @@ def export_aescript_from_timeline(
             code="empty_timeline",
         )
 
-    # Resolution: timeline settings > probed > defaults
-    resolved_fps    = fps    or detected_fps or 25.0
-    resolved_width  = width  or (timeline.width  if hasattr(timeline, "width")  and timeline.width  else detected_w)  or 1920
-    resolved_height = height or (timeline.height if hasattr(timeline, "height") and timeline.height else detected_h) or 1080
+    resolved_fps = fps or detected_fps or 25.0
+    resolved_width = width or (timeline.width if timeline.width else detected_w) or 1920
+    resolved_height = height or (timeline.height if timeline.height else detected_h) or 1080
 
     return export_aescript_from_clips(
         clips,
